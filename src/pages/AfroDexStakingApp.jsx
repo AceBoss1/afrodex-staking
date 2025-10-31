@@ -12,9 +12,10 @@ const MAX_UINT_256_STRING = '115792089237316195423570985008687907853269984665640
 
 /**
  * IMPORTANT: Replace these with your actual contract addresses.
+ * Note: Removed the 'as `0x${string}`' type assertion to fix the ESLint parsing error in .jsx.
  */
-const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C' as `0x${string}`;
-const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c' as `0x${string}`;
+const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C';
+const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c';
 
 // Minimal ERC-20 ABI
 const AFRODEX_TOKEN_ABI = [
