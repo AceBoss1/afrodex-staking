@@ -1,82 +1,66 @@
-// src/config/abis.ts
+// --- CONTRACT ADDRESSES ---
+// NOTE: Please replace these with the actual addresses of your deployed contracts.
+// Using placeholder addresses for now.
+export const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C' as const;
+export const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c' as const;
 
-// --- Smart Contract Addresses ---
+// --- ABIS ---
 
-// The Staking contract address is pulled from the environment variables
-export const STAKING_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS as `0x${string}`;
+// Simplified ERC-20 ABI for essential functions: balanceOf, allowance, and approve
+export const AFRODEX_TOKEN_ABI = [
+  {
+    inputs: [{ internalType: 'address', name: 'owner', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'owner', type: 'address' },
+      { internalType: 'address', name: 'spender', type: 'address' },
+    ],
+    name: 'allowance',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: 'spender', type: 'address' },
+      { internalType: 'uint256', name: 'amount', type: 'uint256' },
+    ],
+    name: 'approve',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
 
-// NOTE: You will also need the token address (AfroDex Token) that is being staked. 
-// For this example, we assume the Staking contract (0x307...) is ALSO the token, 
-// based on the ABI having token functions (transfer, approve, balanceOf).
-// If the token is a SEPARATE contract, you must get its address and add it here.
-export const AFRODEX_TOKEN_ADDRESS = STAKING_CONTRACT_ADDRESS; 
-
-// --- Staking and Token ABI (Simplified) ---
-// This includes functions for token interaction (balanceOf, approve) and staking (stake, unstake, viewStakeInfoOf)
+// Simplified Staking ABI for essential functions: stake, unstake, getStakeInfo
 export const STAKING_ABI = [
-  // Token Read: balanceOf(address account) returns (uint256)
   {
-    "constant": true,
-    "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
-    "name": "balanceOf",
-    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-    "stateMutability": "view",
-    "type": "function"
+    inputs: [{ internalType: 'uint256', name: 'amount', type: 'uint256' }],
+    name: 'stake',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
-  // Token Write: approve(address spender, uint256 amount) returns (bool)
   {
-    "constant": false,
-    "inputs": [
-      {"internalType": "address", "name": "spender", "type": "address"},
-      {"internalType": "uint256", "name": "amount", "type": "uint256"}
+    inputs: [{ internalType: 'uint256', name: 'amount', type: 'uint256' }],
+    name: 'unstake',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: 'user', type: 'address' }],
+    name: 'getStakeInfo',
+    outputs: [
+      { internalType: 'uint256', name: 'stakeBalance', type: 'uint256' },
+      { internalType: 'uint256', name: 'rewardValue', type: 'uint256' },
     ],
-    "name": "approve",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    stateMutability: 'view',
+    type: 'function',
   },
-  // Token Read: allowance(address owner, address spender) returns (uint256)
-  {
-      "constant": true,
-      "inputs": [
-        {"internalType": "address", "name": "owner", "type": "address"},
-        {"internalType": "address", "name": "spender", "type": "address"}
-      ],
-      "name": "allowance",
-      "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-      "stateMutability": "view",
-      "type": "function"
-  },
-  // Staking Write: stake(uint256 amount) returns (bool)
-  {
-    "constant": false,
-    "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
-    "name": "stake",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // Staking Write: unstake(uint256 amount) returns (bool)
-  {
-    "constant": false,
-    "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
-    "name": "unstake",
-    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  // Staking Read: viewStakeInfoOf(address account) returns (uint256 stakeBalance, uint256 rewardValue, uint256 lastUnstakeTimestamp, uint256 lastRewardTimestamp)
-  {
-    "constant": true,
-    "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
-    "name": "viewStakeInfoOf",
-    "outputs": [
-      {"internalType": "uint256", "name": "stakeBalance", "type": "uint256"},
-      {"internalType": "uint256", "name": "rewardValue", "type": "uint256"},
-      {"internalType": "uint256", "name": "lastUnstakeTimestamp", "type": "uint256"},
-      {"internalType": "uint256", "name": "lastRewardTimestamp", "type": "uint256"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
 ] as const;
