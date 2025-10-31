@@ -14,11 +14,11 @@ function MyApp({ Component, pageProps }: AppProps) {
 return (
   <> 
     <QueryClientProvider client={client}>
-      <WagmiProvider config={wagmiConfig}>
-        <RainbowKitProvider chains={chains}>
-          <Component {...pageProps} />
-        </RainbowKitProvider>
-      </WagmiProvider>
+     <WagmiProvider config={wagmiConfig}>
+    <RainbowKitProvider> 
+      <Component {...pageProps} />
+    </RainbowKitProvider>
+  </WagmiProvider>
     </QueryClientProvider>
   </>
 );
