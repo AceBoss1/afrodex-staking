@@ -1,27 +1,166 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useAccount } from 'wagmi';
+// These dependencies are assumed to be available in the environment
+import { useAccount, useContractRead, useContractWrite } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { formatUnits, parseUnits } from 'viem';
-import {
-  useAfrodexTokenBalance,
-  useStakeInfo,
-  useTokenAllowance,
-  useApproveStaking,
-  useStake,
-  useUnstake,
-  StakeInfo, // This import will now work
-} from '../hooks/useStaking'; // Relative path to the hook file
-import { AFRODEX_TOKEN_ADDRESS, STAKING_CONTRACT_ADDRESS } from '../config/abis';
+import { Address } from 'viem';
 
-// --- Constants ---
+// --- CONFIGURATION & ABIS (Formerly in: ../config/abis) ---
+
+const AFRODEX_TOKEN_ADDRESS: Address = '0x08130635368AA28b217a4dfb68E1bF8dC525621C' as Address;
+const STAKING_CONTRACT_ADDRESS: Address = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c' as Address;
+
+const AFRODEX_TOKEN_ABI = [
+  {
+    "constant": true,
+    "inputs": [{"name": "_owner", "type": "address"}, {"name": "_spender", "type": "address"}],
+    "name": "allowance",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [{"name": "_owner", "type": "address"}],
+    "name": "balanceOf",
+    "outputs": [{"name": "balance", "type": "uint256"}],
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [{"name": "_spender", "type": "address"}, {"name": "_value", "type": "uint256"}],
+    "name": "approve",
+    "outputs": [{"name": "", "type": "bool"}],
+    "type": "function"
+  },
+] as const;
+
+const STAKING_ABI = [
+  {
+    "inputs": [{"internalType": "address", "name": "user", "type": "address"}],
+    "name": "getUserStakeInfo",
+    "outputs": [
+      {"internalType": "uint256", "name": "stakeBalance", "type": "uint256"},
+      {"internalType": "uint256", "name": "rewardValue", "type": "uint256"}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
+    "name": "stake",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
+    "name": "unstake",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+] as const;
+
+// --- HOOKS (Formerly in: ../hooks/useStaking) ---
+
+/**
+ * Type definition for the staking data returned by the contract.
+ */
+interface StakeInfo {
+    stakeBalance: bigint;
+    rewardValue: bigint;
+}
+
+/**
+ * Fetches the AFRODEX token balance for a user.
+ */
+const useAfrodexTokenBalance = (address?: Address) => {
+  return useContractRead({
+    address: AFRODEX_TOKEN_ADDRESS,
+    abi: AFRODEX_TOKEN_ABI,
+    functionName: 'balanceOf',
+    args: [address as Address],
+    enabled: !!address,
+    watch: true,
+  });
+};
+
+/**
+ * Fetches the staking contract's allowance for a user's tokens.
+ */
+const useTokenAllowance = (address?: Address) => {
+  return useContractRead({
+    address: AFRODEX_TOKEN_ADDRESS,
+    abi: AFRODEX_TOKEN_ABI,
+    functionName: 'allowance',
+    args: [address as Address, STAKING_CONTRACT_ADDRESS],
+    enabled: !!address,
+    watch: true,
+  });
+};
+
+/**
+ * Fetches the user's stake balance and pending rewards.
+ */
+const useStakeInfo = (address?: Address) => {
+  const { data, ...rest } = useContractRead({
+    address: STAKING_CONTRACT_ADDRESS,
+    abi: STAKING_ABI,
+    functionName: 'getUserStakeInfo',
+    args: [address as Address],
+    enabled: !!address,
+    watch: true,
+  });
+
+  return {
+    data: data ? { stakeBalance: data[0], rewardValue: data[1] } as StakeInfo : undefined,
+    ...rest,
+  };
+};
+
+/**
+ * Hook to approve the staking contract to spend AFRODEX tokens.
+ */
+const useApproveStaking = () => {
+  return useContractWrite({
+    abi: AFRODEX_TOKEN_ABI,
+    functionName: 'approve',
+    address: AFRODEX_TOKEN_ADDRESS,
+  });
+};
+
+/**
+ * Hook to stake AFRODEX tokens.
+ */
+const useStake = () => {
+  return useContractWrite({
+    abi: STAKING_ABI,
+    functionName: 'stake',
+    address: STAKING_CONTRACT_ADDRESS,
+  });
+};
+
+/**
+ * Hook to unstake AFRODEX tokens.
+ */
+const useUnstake = () => {
+  return useContractWrite({
+    abi: STAKING_ABI,
+    functionName: 'unstake',
+    address: STAKING_CONTRACT_ADDRESS,
+  });
+};
+
+// --- COMPONENT LOGIC (Formerly in: src/pages/AfroDexStakingApp.jsx) ---
+
+// Constants
 const TOKEN_DECIMALS = 18;
-// Max approval as string to avoid BigInt literal error
 const MAX_UINT_256_STRING = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 
 // --- UI Sub-Components ---
 
 /**
- * Renders the centered prompt to connect the wallet when the user is disconnected.
+ * Renders the prompt to connect the wallet when the user is disconnected.
  */
 const ConnectWalletPrompt = () => (
   <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8">
@@ -49,7 +188,6 @@ export default function AfroDexStakingApp() {
   // --- Wagmi Hooks (Called Unconditionally) ---
   const { data: tokenBalance, refetch: refetchTokenBalance } = useAfrodexTokenBalance(userAddress);
   const { data: allowance, refetch: refetchAllowance } = useTokenAllowance(userAddress);
-  // Type assertion to ensure TypeScript knows the structure of stakeInfo
   const { data: stakeInfo, refetch: refetchStakeInfo } = useStakeInfo(userAddress);
 
   const { writeContract: writeApprove, isPending: isApproving, isSuccess: isApproved } = useApproveStaking();
@@ -57,7 +195,7 @@ export default function AfroDexStakingApp() {
   const { writeContract: writeUnstake, isPending: isUnstaking, isSuccess: isUnstaked } = useUnstake();
 
   // Memoized/Derived State
-  // Use BigInt(0) for compatibility instead of 0n
+  // Using BigInt(0) for compatibility
   const stakeBalanceFormatted = useMemo(() => formatUnits(stakeInfo?.stakeBalance || BigInt(0), TOKEN_DECIMALS), [stakeInfo]);
   const rewardValueFormatted = useMemo(() => formatUnits(stakeInfo?.rewardValue || BigInt(0), TOKEN_DECIMALS), [stakeInfo]);
   const tokenBalanceFormatted = useMemo(() => formatUnits(tokenBalance || BigInt(0), TOKEN_DECIMALS), [tokenBalance]);
@@ -92,7 +230,7 @@ export default function AfroDexStakingApp() {
       
       await writeApprove({
         address: AFRODEX_TOKEN_ADDRESS,
-        abi: AFRODEX_TOKEN_ABI, // ABI must be provided here
+        abi: AFRODEX_TOKEN_ABI,
         functionName: 'approve',
         args: [
           STAKING_CONTRACT_ADDRESS,
@@ -110,7 +248,7 @@ export default function AfroDexStakingApp() {
       const amount = parseUnits(stakeAmount, TOKEN_DECIMALS);
       await writeStake({ 
         address: STAKING_CONTRACT_ADDRESS,
-        abi: STAKING_ABI, // ABI must be provided here
+        abi: STAKING_ABI,
         functionName: 'stake',
         args: [amount],
       });
@@ -125,7 +263,7 @@ export default function AfroDexStakingApp() {
       const amount = parseUnits(unstakeAmount, TOKEN_DECIMALS);
       await writeUnstake({ 
         address: STAKING_CONTRACT_ADDRESS,
-        abi: STAKING_ABI, // ABI must be provided here
+        abi: STAKING_ABI,
         functionName: 'unstake',
         args: [amount],
       });
