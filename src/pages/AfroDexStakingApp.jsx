@@ -6,7 +6,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { Address } from 'viem';
 
 // --- CONFIGURATION & ABIS (Formerly in: ../config/abis) ---
-
+// NOTE: These are mock addresses and ABIs for demonstration. Replace with actual values.
 const AFRODEX_TOKEN_ADDRESS: Address = '0x08130635368AA28b217a4dfb68E1bF8dC525621C' as Address;
 const STAKING_CONTRACT_ADDRESS: Address = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c' as Address;
 
