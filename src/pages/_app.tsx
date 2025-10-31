@@ -1,63 +1,62 @@
-// src/pages/_app.tsx
-
-import React from 'react';
-import type { AppProps } from 'next/app';
-
-// --- RainbowKit & Wagmi Imports ---
+import '../styles/globals.css';
 import '@rainbow-me/rainbowkit/styles.css';
+
+import type { AppProps } from 'next/app';
 import { getDefaultConfig, RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
-// We include common chains (mainnet and a testnet) as a robust default configuration.
-import { sepolia, mainnet } from 'wagmi/chains'; 
+import { mainnet, sepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { http } from 'viem';
 
-// --- Global Styles Import (MANDATORY) ---
-import '../styles/globals.css';
+// --- Environment Variables (Must be NEXT_PUBLIC_ prefix) ---
+// Note: This check ensures the variables are available at runtime.
+const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
+const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
-// --- Configuration ---
+if (!projectId) {
+    console.error("CRITICAL ERROR: NEXT_PUBLIC_PROJECT_ID is not set. WalletConnect will fail.");
+}
+if (!alchemyApiKey) {
+    console.error("CRITICAL ERROR: NEXT_PUBLIC_ALCHEMY_API_KEY is not set. RPC connection will be unstable.");
+}
 
-// 1. Initialize React Query Client
-// Used by Wagmi internally for caching and fetching blockchain data
+// 1. Initialize Query Client for React Query
 const queryClient = new QueryClient();
 
-// 2. Configure Chains for RainbowKit/Wagmi
-// NOTE: VITE_WALLETCONNECT_PROJECT_ID should be set in your .env.local file
-// This is critical for mobile wallet connections (WalletConnect)
-const projectId = process.env.VITE_WALLETCONNECT_PROJECT_ID || 'YOUR_WALLETCONNECT_PROJECT_ID';
-
+// 2. Configure Wagmi and RainbowKit
 const config = getDefaultConfig({
-  appName: 'AfroDex Staking',
-  projectId,
+  appName: 'AfroDex Staking Platform',
+  projectId: projectId || 'MISSING_PROJECT_ID', // Use fallback if missing
   chains: [
-    mainnet, // Ethereum Mainnet
-    sepolia, // Ethereum Testnet (Recommended for testing)
-    // Add any specific EVM-compatible chain where your contract is deployed here.
+    mainnet,
+    sepolia,
   ],
-  ssr: true, // Recommended for Next.js apps
+  // Use Alchemy transport for maximum stability if the key is available
+  transports: {
+    [mainnet.id]: http(`https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`),
+    [sepolia.id]: http(`https://eth-sepolia.g.alchemy.com/v2/${alchemyApiKey}`),
+  },
+  ssr: true,
 });
 
-// --- Main App Component ---
 function MyApp({ Component, pageProps }: AppProps) {
   return (
-    // 1. QueryClientProvider wraps the entire app
-    <QueryClientProvider client={queryClient}>
-      {/* 2. WagmiProvider provides the core Web3 state */}
-      <WagmiProvider config={config}>
-        {/* 3. RainbowKitProvider provides the connection UI and theming */}
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
+          modalSize="compact"
           theme={darkTheme({
-            accentColor: '#F59E0B', // Deep Yellowish Orange (AfroDex Brand Color)
-            accentColorForeground: 'white',
-            borderRadius: 'medium',
+            accentColor: '#F59E0B', 
+            accentColorForeground: '#000000', 
+            borderRadius: 'large',
             fontStack: 'system',
+            overlayBlur: 'small',
           })}
-          modalSize="compact" // Use compact size for better mobile and desktop popups
         >
-          {/* The Component is the current page (e.g., index.tsx) */}
           <Component {...pageProps} />
         </RainbowKitProvider>
-      </WagmiProvider>
-    </QueryClientProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }
 
