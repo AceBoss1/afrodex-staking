@@ -137,4 +137,5 @@ color: white;
 }
 
 .approve-button:hover:not(:disabled) {
-background-color: #FBBF24; /* Lighter gold on hover
+background-color: #FBBF24; /* Lighter gold on hover */
+}
