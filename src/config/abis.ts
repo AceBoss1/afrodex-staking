@@ -1,77 +1,87 @@
-// --- CONSTANTS ---
+ // --- Contract ABIs ---
 
-/**
- * Replace these with your actual contract addresses.
- */
-export const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C' as `0x${string}`;
-export const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c' as `0x${string}`;
+    // Minimal ERC-20 ABI for interacting with the AFRODEX token (balanceOf, approve)
+    export const AFRODEX_TOKEN_ABI = [
+        {
+            "inputs": [
+                { "internalType": "address", "name": "owner", "type": "address" },
+                { "internalType": "address", "name": "spender", "type": "address" }
+            ],
+            "name": "allowance",
+            "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                { "internalType": "address", "name": "spender", "type": "address" },
+                { "internalType": "uint256", "name": "amount", "type": "uint256" }
+            ],
+            "name": "approve",
+            "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
+            "name": "balanceOf",
+            "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "decimals",
+            "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [],
+            "name": "symbol",
+            "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+            "stateMutability": "view",
+            "type": "function"
+        }
+    ];
 
-// --- ABIs ---
+    // Minimal Staking Contract ABI (stake, unstake, getStakeInfo)
+    export const STAKING_ABI = [
+        {
+            "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+            "name": "getStakeInfo",
+            "outputs": [
+                { "internalType": "uint256", "name": "stakeBalance", "type": "uint256" },
+                { "internalType": "uint256", "name": "rewardValue", "type": "uint256" }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
+            "name": "stake",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [{ "internalType": "uint256", "name": "amount", "type": "uint256" }],
+            "name": "unstake",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        }
+    ];
 
-/**
- * Minimal ERC-20 ABI for `balanceOf` and `allowance`/`approve`.
- * This should be compatible with your AFRODEX Token contract.
- */
-export const AFRODEX_TOKEN_ABI = [
-  {
-    type: 'function',
-    name: 'balanceOf',
-    stateMutability: 'view',
-    inputs: [{ type: 'address', name: 'owner' }],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'allowance',
-    stateMutability: 'view',
-    inputs: [
-      { type: 'address', name: 'owner' },
-      { type: 'address', name: 'spender' },
-    ],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'approve',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { type: 'address', name: 'spender' },
-      { type: 'uint256', name: 'amount' },
-    ],
-    outputs: [{ type: 'bool' }],
-  },
-] as const;
+    // --- Contract Addresses (Loaded from Environment Variables) ---
 
-/**
- * Minimal Staking Contract ABI for `getStakeInfo`, `stake`, and `unstake`.
- * Adjust function signatures if your contract differs.
- */
-export const STAKING_ABI = [
-  // getStakeInfo(address user) returns (uint256 stakeBalance, uint256 rewardValue)
-  {
-    type: 'function',
-    name: 'getStakeInfo',
-    stateMutability: 'view',
-    inputs: [{ type: 'address', name: 'user' }],
-    outputs: [
-      { type: 'uint256', name: 'stakeBalance' },
-      { type: 'uint256', name: 'rewardValue' },
-    ],
-  },
-  // stake(uint256 amount)
-  {
-    type: 'function',
-    name: 'stake',
-    stateMutability: 'nonpayable',
-    inputs: [{ type: 'uint256', name: 'amount' }],
-    outputs: [],
-  },
-  // unstake(uint256 amount)
-  {
-    type: 'function',
-    name: 'unstake',
-    stateMutability: 'nonpayable',
-    inputs: [{ type: 'uint256', name: 'amount' }],
-    outputs: [],
-  },
-] as const;
+    // The AFRODEX Token address, loaded from NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS
+    export const AFRODEX_TOKEN_ADDRESS = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS as `0x${string}`;
+
+    // The Staking Contract address, loaded from NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS
+    export const STAKING_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS as `0x${string}`;
+
+    // Ensure the addresses are defined at build time (Next.js requires public env vars to start with NEXT_PUBLIC_)
+    if (!AFRODEX_TOKEN_ADDRESS || !STAKING_CONTRACT_ADDRESS) {
+        console.error("FATAL ERROR: Contract addresses are missing. Please ensure NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS and NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS are set in your .env.local file.");
+    }
