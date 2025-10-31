@@ -1,141 +1,25 @@
-/* styles/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Custom Colors: Deep Yellowish Orange /
-/ We use Tailwind's 'amber' as a base, enhanced with custom shades for contrast. */
+@layer base {
+  /* Enforce the Inter font globally */
+  html {
+    font-family: 'Inter', sans-serif;
+  }
+}
 
+/* Custom utility classes */
+@layer components {
+  /* Card style for the stats and staking inputs */
+  .staking-card {
+    @apply bg-gray-900 p-4 md:p-6 rounded-2xl shadow-xl transition duration-300 border border-gray-700 hover:border-amber-500;
+  }
+}
+
+/* FIX: Global readability enhancement */
+/* Ensure default text is a bright, easily readable color (amber-200/gray-200) */
 body {
-background-color: #000000; /* Pure Black Background /
-color: #E2E8F0; / Off-white text for high contrast /
-font-family: 'Inter', sans-serif;
-min-height: 100vh;
-padding: 0;
-margin: 0;
-display: flex;
-justify-content: center;
-align-items: flex-start; / Start content from the top */
-}
-
-.staking-dashboard {
-max-width: 1000px;
-width: 95%;
-margin-top: 40px;
-padding: 32px;
-background-color: #0d0d0d; /* Slightly off-black card background for depth /
-border-radius: 12px;
-box-shadow: 0 10px 30px rgba(255, 193, 7, 0.15); / Soft gold shadow /
-border: 1px solid #333; / Subtle border */
-}
-
-.header {
-text-align: center;
-margin-bottom: 32px;
-position: relative;
-}
-
-.wallet-info {
-position: absolute;
-top: 0;
-right: 0;
-}
-
-/* --- Stats Grid: Responsive Layout --- */
-.stats-grid {
-display: grid;
-grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-gap: 20px;
-margin-bottom: 40px;
-}
-
-.stat-card {
-background-color: #1a1a1a; /* Dark gray for cards /
-padding: 24px;
-border-radius: 8px;
-border-left: 4px solid #F59E0B; / Deep Yellowish Orange/Amber accent line */
-box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-}
-
-.stat-title {
-font-size: 1rem;
-color: #9CA3AF; /* Gray text for labels */
-margin-bottom: 8px;
-}
-
-.stat-value {
-font-size: 1.875rem; /* 3xl for emphasis */
-font-weight: 700;
-}
-
-/* --- Action Panels: Stake/Unstake --- */
-.action-panels {
-display: grid;
-grid-template-columns: 1fr;
-gap: 30px;
-}
-
-@media (min-width: 768px) {
-.action-panels {
-grid-template-columns: repeat(2, 1fr);
-}
-}
-
-.action-card {
-background-color: #1a1a1a;
-padding: 30px;
-border-radius: 8px;
-border: 1px solid #333;
-}
-
-.input-field {
-width: 100%;
-padding: 12px;
-margin-bottom: 20px;
-background-color: #262626;
-border: 1px solid #4B5563;
-color: white;
-border-radius: 6px;
-transition: border-color 0.2s;
-}
-
-.input-field:focus {
-border-color: #F59E0B; /* Deep Yellowish Orange focus */
-outline: none;
-}
-
-.action-button, .approve-button {
-width: 100%;
-padding: 14px;
-font-size: 1rem;
-font-weight: 700;
-color: #1a1a1a; /* Dark text on bright button for readability /
-background-color: #F59E0B; / Deep Yellowish Orange (Amber 600) */
-border-radius: 6px;
-transition: background-color 0.2s, opacity 0.2s;
-cursor: pointer;
-border: none;
-}
-
-.disabled-button {
-background-color: #4B5563; /* Muted gray when disabled */
-cursor: not-allowed;
-opacity: 0.6;
-}
-
-.approve-section {
-padding: 15px;
-border: 1px dashed #F59E0B; /* Dashed border to highlight required action */
-border-radius: 6px;
-background-color: #262626;
-text-align: center;
-}
-
-.approve-button {
-background-color: #D97706; /* Slightly darker gold for a distinct approval action */
-color: white;
-}
-
-.approve-button:hover:not(:disabled) {
-background-color: #FBBF24; /* Lighter gold on hover */
+    background-color: #000000;
+    color: #f5f5f5; /* Changed default text to near-white for high contrast */
 }
