@@ -1,66 +1,77 @@
-// --- CONTRACT ADDRESSES ---
-// NOTE: Please replace these with the actual addresses of your deployed contracts.
-// Using placeholder addresses for now.
-export const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C' as const;
-export const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c' as const;
+// --- CONSTANTS ---
 
-// --- ABIS ---
+/**
+ * Replace these with your actual contract addresses.
+ */
+export const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C' as `0x${string}`;
+export const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c' as `0x${string}`;
 
-// Simplified ERC-20 ABI for essential functions: balanceOf, allowance, and approve
+// --- ABIs ---
+
+/**
+ * Minimal ERC-20 ABI for `balanceOf` and `allowance`/`approve`.
+ * This should be compatible with your AFRODEX Token contract.
+ */
 export const AFRODEX_TOKEN_ABI = [
   {
-    inputs: [{ internalType: 'address', name: 'owner', type: 'address' }],
+    type: 'function',
     name: 'balanceOf',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
     stateMutability: 'view',
-    type: 'function',
+    inputs: [{ type: 'address', name: 'owner' }],
+    outputs: [{ type: 'uint256' }],
   },
   {
-    inputs: [
-      { internalType: 'address', name: 'owner', type: 'address' },
-      { internalType: 'address', name: 'spender', type: 'address' },
-    ],
+    type: 'function',
     name: 'allowance',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
     stateMutability: 'view',
-    type: 'function',
+    inputs: [
+      { type: 'address', name: 'owner' },
+      { type: 'address', name: 'spender' },
+    ],
+    outputs: [{ type: 'uint256' }],
   },
   {
-    inputs: [
-      { internalType: 'address', name: 'spender', type: 'address' },
-      { internalType: 'uint256', name: 'amount', type: 'uint256' },
-    ],
-    name: 'approve',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    stateMutability: 'nonpayable',
     type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { type: 'address', name: 'spender' },
+      { type: 'uint256', name: 'amount' },
+    ],
+    outputs: [{ type: 'bool' }],
   },
 ] as const;
 
-// Simplified Staking ABI for essential functions: stake, unstake, getStakeInfo
+/**
+ * Minimal Staking Contract ABI for `getStakeInfo`, `stake`, and `unstake`.
+ * Adjust function signatures if your contract differs.
+ */
 export const STAKING_ABI = [
+  // getStakeInfo(address user) returns (uint256 stakeBalance, uint256 rewardValue)
   {
-    inputs: [{ internalType: 'uint256', name: 'amount', type: 'uint256' }],
-    name: 'stake',
-    outputs: [],
-    stateMutability: 'nonpayable',
     type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'uint256', name: 'amount', type: 'uint256' }],
-    name: 'unstake',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'address', name: 'user', type: 'address' }],
     name: 'getStakeInfo',
-    outputs: [
-      { internalType: 'uint256', name: 'stakeBalance', type: 'uint256' },
-      { internalType: 'uint256', name: 'rewardValue', type: 'uint256' },
-    ],
     stateMutability: 'view',
+    inputs: [{ type: 'address', name: 'user' }],
+    outputs: [
+      { type: 'uint256', name: 'stakeBalance' },
+      { type: 'uint256', name: 'rewardValue' },
+    ],
+  },
+  // stake(uint256 amount)
+  {
     type: 'function',
+    name: 'stake',
+    stateMutability: 'nonpayable',
+    inputs: [{ type: 'uint256', name: 'amount' }],
+    outputs: [],
+  },
+  // unstake(uint256 amount)
+  {
+    type: 'function',
+    name: 'unstake',
+    stateMutability: 'nonpayable',
+    inputs: [{ type: 'uint256', name: 'amount' }],
+    outputs: [],
   },
 ] as const;
