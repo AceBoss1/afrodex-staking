@@ -9,7 +9,7 @@ const Home = () => {
     <div className="min-h-screen bg-black flex flex-col items-center">
       <Head>
         <title>AfroDex Staking Platform</title>
-        <meta name="description" content="Stake AFRODEX tokens and earn rewards." />
+        <meta name="description" content="Stake APPROVED coins and tokens on AFRODEX and earn huge rewards." />
       </Head>
 
       {/* Container to center the main content on large screens */}
