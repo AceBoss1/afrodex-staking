@@ -1,37 +1,28 @@
-import { createConfig, configureChains, mainnet } from 'wagmi';
-import { publicProvider } from 'wagmi/providers/public';
-import { alchemyProvider } from 'wagmi/providers/alchemy';
-import { getDefaultWallets } from '@rainbow-me/rainbowkit';
+// src/wagmi.ts - Wagmi v2 Configuration Syntax
 
-// 1. Get Alchemy API Key from the environment variable
+import { createConfig, http } from 'wagmi';
+import { mainnet } from 'wagmi/chains';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+
+// 1. Get Environment Variables
+const projectId = process.env.NEXT_PUBLIC_PROJECT_ID;
 const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
-// 2. Define chains and providers
-// We use alchemyProvider and publicProvider as a fallback for robustness
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [mainnet], // The AfroDex contract is on Ethereum Mainnet
-  [
-    // Alchemy provider is first, using your API Key
-    alchemyProvider({ apiKey: alchemyApiKey! }),
-    // Public provider as a fallback
-    publicProvider(),
-  ]
-);
+// 2. Define the Alchemy RPC URL as the primary transport
+// We construct the URL manually, as the provider helper is no longer used in this manner
+const alchemyRpcUrl = `https://eth-mainnet.g.alchemy.com/v2/${alchemyApiKey}`;
 
-// 3. Configure RainbowKit connectors
-const { connectors } = getDefaultWallets({
+// 3. Create the Wagmi Config using RainbowKit's getDefaultConfig helper
+// This handles connectors (MetaMask, WalletConnect, etc.) and chains
+export const wagmiConfig = getDefaultConfig({
   appName: 'AfroDex Staking Platform',
-  projectId: process.env.NEXT_PUBLIC_PROJECT_ID!,
-  chains,
+  projectId: projectId || 'YOUR_FALLBACK_PROJECT_ID', // Use your actual project ID from .env.local
+  chains: [mainnet],
+  transports: {
+    // Only use Alchemy transport for Mainnet
+    [mainnet.id]: http(alchemyRpcUrl),
+  },
 });
 
-// 4. Create the final Wagmi Config
-export const wagmiConfig = createConfig({
-  autoConnect: true,
-  connectors,
-  publicClient,
-  webSocketPublicClient,
-});
-
-// Export chains for RainbowKitProvider
-export { chains };
+// 4. Export chains for the RainbowKitProvider (if needed, but usually redundant in v2)
+export const chains = wagmiConfig.chains; // Extract chains from the config
