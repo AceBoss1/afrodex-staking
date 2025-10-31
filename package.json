@@ -1,0 +1,24 @@
+{
+  "name": "afrodex-staking",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.55.3",
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "viem": "2.31.7",
+    "wagmi": "^2.17.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.8",
+    "@types/react": "^19.1.8",
+    "eslint-config-next": "^15.1.7",
+    "typescript": "5.5.4"
+  }
+}
