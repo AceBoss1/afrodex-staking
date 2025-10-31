@@ -12,8 +12,11 @@ import {
 } from '../config/abis';
 import { parseUnits, formatUnits, maxUint256 } from 'viem';
 
-// Helper type for the stake info view function output
-interface StakeInfo {
+// FIX: Added 'export' so this type can be imported by StakingComponent.tsx
+/**
+ * Helper type for the stake info view function output (stake balance and rewards).
+ */
+export interface StakeInfo {
   stakeBalance: bigint;
   rewardValue: bigint;
 }
