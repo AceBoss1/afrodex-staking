@@ -1,188 +1,215 @@
-// src/components/StakingComponent.tsx
-
-import React, { useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { formatUnits, parseUnits } from 'viem';
 import {
-  useTokenData,
-  useStakingInfo,
+  useAfrodexTokenBalance,
+  useStakeInfo,
+  useTokenAllowance,
   useApproveStaking,
   useStake,
   useUnstake,
 } from '../hooks/useStaking';
-import { formatUnits } from 'viem';
-import { STAKING_CONTRACT_ADDRESS } from '../config/abis';
 
-// --- Helper: Render Transaction Status ---
-const TransactionStatus = ({ isPending, isConfirming, isConfirmed, error }: any) => {
-  if (isPending) return <p className="text-amber-400 mt-2">Waiting for Wallet Confirmation...</p>;
-  if (isConfirming) return <p className="text-amber-400 mt-2">Transaction Submitting...</p>;
-  if (isConfirmed) return <p className="text-green-500 mt-2">Transaction Confirmed!</p>;
-  if (error) return <p className="text-red-500 mt-2">Error: {(error as any).shortMessage || (error as Error).message}</p>;
-  return null;
-};
+// Constants
+const TOKEN_DECIMALS = 18;
+const MAX_UINT_256_STRING = (2n ** 256n - 1n).toString(); // Standard maximum approval value
 
-const ConnectWalletPrompt = () => (
-    <div className="text-center p-8 bg-zinc-800 rounded-lg shadow-xl border border-amber-500/20">
-        <p className="text-xl text-amber-500 mb-4 font-semibold">Connect Your Wallet to Begin Staking</p>
-        <ConnectButton />
+// --- UI Components ---
+
+/**
+ * Renders the prompt to connect the wallet when the user is disconnected.
+ */
+const ConnectWalletPrompt: React.FC = () => (
+  <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-8">
+    <h1 className="text-3xl font-bold text-amber-500 mb-4">Welcome to the AfroDex Staking Dashboard!</h1>
+    <p className="text-gray-300 text-lg mb-8">
+      Stake AFRODEX tokens and earn rewards. Connect your wallet to begin.
+    </p>
+    <div className="mb-12">
+      <ConnectButton />
     </div>
+  </div>
 );
 
 // --- Main Component ---
+
 export const AfroDexStakingComponent: React.FC = () => {
-  const { isConnected, address: userAddress } = useAccount();
+  const { address: userAddress, isConnected } = useAccount();
 
-  // FIX: All hooks must be called at the top level, unconditionally.
-  const { userBalance, allowanceValue, refetch: refetchTokenData } = useTokenData();
-  const { stakeBalance, rewardValue, refetch: refetchStakingInfo } = useStakingInfo();
-  
-  // Write Hooks
-  const { approve, isPending: isApprovePending, isConfirming: isApproveConfirming, isConfirmed: isApproveConfirmed, error: approveError } = useApproveStaking();
-  const { amount: stakeAmount, setAmount: setStakeAmount, stake, isPending: isStakePending, isConfirming: isStakeConfirming, isConfirmed: isStakeConfirmed, error: stakeError } = useStake();
-  const { amount: unstakeAmount, setAmount: setUnstakeAmount, unstake, isPending: isUnstakePending, isConfirming: isUnstakeConfirming, isConfirmed: isUnstakeConfirmed, error: unstakeError } = useUnstake();
+  // State for user input
+  const [stakeAmount, setStakeAmount] = useState('');
+  const [unstakeAmount, setUnstakeAmount] = useState('');
 
-  // Refetch data after any successful transaction
-  useEffect(() => {
-    if (isApproveConfirmed || isStakeConfirmed || isUnstakeConfirmed) {
-      refetchTokenData();
-      refetchStakingInfo();
+  // --- Wagmi Hooks (Called Unconditionally) ---
+  const { data: tokenBalance, refetch: refetchTokenBalance } = useAfrodexTokenBalance(userAddress);
+  const { data: allowance, refetch: refetchAllowance } = useTokenAllowance(userAddress);
+  const { data: stakeInfo, refetch: refetchStakeInfo } = useStakeInfo(userAddress);
+
+  const { writeContract: writeApprove, isPending: isApproving } = useApproveStaking();
+  const { writeContract: writeStake, isPending: isStaking } = useStake();
+  const { writeContract: writeUnstake, isPending: isUnstaking } = useUnstake();
+
+  // Memoized/Derived State
+  const stakeBalanceFormatted = useMemo(() => formatUnits(stakeInfo?.stakeBalance || 0n, TOKEN_DECIMALS), [stakeInfo]);
+  const rewardValueFormatted = useMemo(() => formatUnits(stakeInfo?.rewardValue || 0n, TOKEN_DECIMALS), [stakeInfo]);
+  const tokenBalanceFormatted = useMemo(() => formatUnits(tokenBalance || 0n, TOKEN_DECIMALS), [tokenBalance]);
+
+  // Check if staking is allowed (based on allowance being less than a large number)
+  const needsApproval = useMemo(() => {
+    return (allowance || 0n) < (parseUnits('10000000', TOKEN_DECIMALS)); // Needs approval if less than 10M tokens
+  }, [allowance]);
+
+  // --- Handlers ---
+
+  const handleApprove = () => {
+    if (!writeApprove) return;
+    try {
+      // Approve the maximum possible amount
+      writeApprove({
+        args: [
+          '0x30715F7679B3e5574fb2CC9Cb4c9E5994109ed8c' as `0x${string}`, // STAKING_CONTRACT_ADDRESS
+          BigInt(MAX_UINT_256_STRING),
+        ],
+      });
+      // Note: We use the write-wait-refetch pattern in the hook itself for UI updates
+    } catch (e) {
+      console.error('Approval error:', e);
     }
-  }, [isApproveConfirmed, isStakeConfirmed, isUnstakeConfirmed, refetchTokenData, refetchStakingInfo]);
-
-  // Derived state to determine if approval is needed (e.g., if allowance is less than maximum possible stake)
-  const isApproved = useMemo(() => {
-    // Check if allowance is a very large number (like maxUint256, which grants infinite allowance)
-    if (!allowanceValue) return false;
-    // A simplified check: if allowance is greater than 1 million tokens (or some safe high threshold)
-    return allowanceValue > BigInt(1000000) * BigInt(10**18);
-  }, [allowanceValue]);
-
-  // --- Render Functions ---
-
-  const renderStakeUnstake = (action: 'Stake' | 'Unstake') => {
-    const isStake = action === 'Stake';
-    const amount = isStake ? stakeAmount : unstakeAmount;
-    const setAmount = isStake ? setStakeAmount : setUnstakeAmount;
-    const execute = isStake ? stake : unstake;
-    const isPending = isStake ? isStakePending : isUnstakePending;
-    const isConfirming = isStake ? isStakeConfirming : isUnstakeConfirming;
-    const error = isStake ? stakeError : unstakeError;
-
-    const maxBalance = isStake ? userBalance : stakeBalance;
-    const maxFunction = isStake ? setStakeAmount : setUnstakeAmount;
-
-    // Check if the input amount is valid (non-zero and less than or equal to available balance/stake)
-    const canExecute = parseFloat(amount) > 0 && parseFloat(amount) <= parseFloat(maxBalance);
-
-    return (
-      <div className="action-card">
-        <h3 className="text-2xl font-bold text-amber-500 mb-6">{action} AFRODEX</h3>
-
-        {/* Amount Input */}
-        <div className="relative mb-3">
-            <input
-                type="number"
-                placeholder={`Amount to ${action.toLowerCase()}`}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="input-field pr-20" // Add padding right for the MAX button
-            />
-            <button
-                onClick={() => maxFunction(maxBalance)}
-                className="absolute right-0 top-0 h-full px-4 text-sm font-semibold text-white bg-amber-600 rounded-r-md hover:bg-amber-700 transition"
-                style={{ clipPath: 'inset(1px 1px 1px 0px round 0 6px 6px 0)' }} // Visual fix for rounded corner conflict
-            >
-                MAX
-            </button>
-        </div>
-        <p className="text-xs text-gray-400 mb-4">
-          Available {isStake ? 'Token Balance' : 'Staked Balance'}: {maxBalance} AFRODEX
-        </p>
-
-        {/* Approval or Action Button */}
-        {isStake && !isApproved ? (
-          <div className="approve-section">
-            <p className="text-sm text-gray-300 mb-3">Approval is required before staking.</p>
-            <button
-              onClick={() => approve()}
-              disabled={isApprovePending || isApproveConfirming}
-              className={`approve-button ${isApprovePending || isApproveConfirming ? 'disabled-button' : ''}`}
-            >
-              {isApprovePending || isApproveConfirming ? 'Approving...' : 'Approve Staking'}
-            </button>
-            <TransactionStatus isPending={isApprovePending} isConfirming={isApproveConfirming} error={approveError} />
-          </div>
-        ) : (
-          <button
-            onClick={() => execute()}
-            disabled={!canExecute || isPending || isConfirming}
-            className={`action-button ${!canExecute || isPending || isConfirming ? 'disabled-button' : ''}`}
-          >
-            {isPending || isConfirming ? `Processing ${action}...` : action}
-          </button>
-        )}
-        <TransactionStatus isPending={isPending} isConfirming={isConfirming} error={error} />
-      </div>
-    );
   };
 
-  if (!isConnected) {
-    return (
-      <div className="staking-dashboard">
-        <ConnectWalletPrompt />
-      </div>
-    );
-  }
+  const handleStake = () => {
+    if (!writeStake || !stakeAmount) return;
+    try {
+      const amount = parseUnits(stakeAmount, TOKEN_DECIMALS);
+      writeStake({ args: [amount] });
+      setStakeAmount('');
+    } catch (e) {
+      console.error('Stake error:', e);
+    }
+  };
+
+  const handleUnstake = () => {
+    if (!writeUnstake || !unstakeAmount) return;
+    try {
+      const amount = parseUnits(unstakeAmount, TOKEN_DECIMALS);
+      writeUnstake({ args: [amount] });
+      setUnstakeAmount('');
+    } catch (e) {
+      console.error('Unstake error:', e);
+    }
+  };
+
+  const handleClaimRewards = () => {
+    // The provided ABI only has 'unstake'. In many contracts,
+    // unstake also claims rewards. If a dedicated claim function
+    // exists (e.g., 'claimReward()'), we would implement it here.
+    // For now, we'll guide the user to unstake to claim.
+    alert('Please use the "Unstake" function to withdraw staked tokens and claim accumulated rewards.');
+    console.log('Attempted to claim rewards.');
+  };
+
+  // --- Render ---
 
   return (
-    <div className="staking-dashboard">
-      {/* Header and Wallet Info */}
-      <div className="header">
-        <h1 className="text-4xl font-extrabold text-amber-500">AfroDex Staking Dashboard</h1>
-        <p className="text-gray-400 mt-2">Earn rewards by staking your AFRODEX tokens.</p>
-        <div className="wallet-info">
-            <ConnectButton showBalance={false} />
-        </div>
-      </div>
-      
-      {/* Stats Grid */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <p className="stat-title">Wallet Balance</p>
-          <p className="stat-value text-amber-300">{userBalance} AFRODEX</p>
-        </div>
-        <div className="stat-card">
-          <p className="stat-title">Total Staked</p>
-          <p className="stat-value">{stakeBalance} AFRODEX</p>
-        </div>
-        <div className="stat-card">
-          <p className="stat-title">Pending Rewards</p>
-          <p className="stat-value text-green-400">{rewardValue} AFRODEX</p>
-        </div>
-        <div className="stat-card">
-          <p className="stat-title">Staking Contract</p>
-          <p className="stat-value text-xs font-normal truncate">{STAKING_CONTRACT_ADDRESS}</p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-black text-gray-100 flex flex-col items-center pt-16">
+      <header className="w-full max-w-4xl flex justify-between items-center px-4 mb-10">
+        <h1 className="text-3xl font-extrabold text-amber-500">AfroDex Staking</h1>
+        <ConnectButton />
+      </header>
 
-      {/* Action Panels */}
-      <div className="action-panels">
-        {renderStakeUnstake('Stake')}
-        {renderStakeUnstake('Unstake')}
-      </div>
-      
-      {/* Reward Claim Panel (Using Unstake combined functionality) */}
-      <div className="action-panels mt-8">
-        <div className="action-card col-span-1 md:col-span-2 text-center">
-            <h3 className="text-2xl font-bold text-amber-500 mb-6">Claim Rewards</h3>
-            <p className="text-lg text-gray-300 mb-6">
-                Your pending rewards of <span className="text-green-400 font-bold">{rewardValue} AFRODEX</span> will be automatically claimed when you *Unstake* any amount. 
-                If you wish to claim without unstaking, you may be able to unstake a very small amount (e.g., 1 AFRODEX) to trigger the reward distribution.
-            </p>
-        </div>
-      </div>
+      <main className="w-full max-w-4xl p-4 flex-grow flex flex-col items-center">
+        {!isConnected ? (
+          <ConnectWalletPrompt />
+        ) : (
+          <div className="w-full space-y-8">
+            <h2 className="text-xl font-semibold mb-4 text-center">Connected Address: {userAddress}</h2>
 
+            {/* Stats Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Card 1: Wallet Balance */}
+              <div className="staking-card">
+                <p className="text-gray-400">Your AFRODEX Balance</p>
+                <p className="text-3xl font-bold text-white mt-1">{tokenBalanceFormatted} AFRODEX</p>
+              </div>
+
+              {/* Card 2: Staked Balance */}
+              <div className="staking-card">
+                <p className="text-gray-400">Total Staked</p>
+                <p className="text-3xl font-bold text-white mt-1">{stakeBalanceFormatted} AFRODEX</p>
+              </div>
+
+              {/* Card 3: Earned Rewards */}
+              <div className="staking-card">
+                <p className="text-gray-400">Pending Rewards</p>
+                <p className="text-3xl font-bold text-white mt-1">{rewardValueFormatted} AFRODEX</p>
+              </div>
+            </div>
+
+            {/* Staking & Unstaking Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Stake Card */}
+              <div className="staking-card p-6">
+                <h3 className="text-2xl font-bold text-amber-500 mb-4">Stake Tokens</h3>
+                <input
+                  type="number"
+                  placeholder="Amount to Stake"
+                  value={stakeAmount}
+                  onChange={(e) => setStakeAmount(e.target.value)}
+                  className="w-full p-3 mb-4 rounded-lg bg-gray-900 border border-gray-700 text-white focus:ring-amber-500 focus:border-amber-500"
+                />
+
+                {needsApproval ? (
+                  <button
+                    onClick={handleApprove}
+                    disabled={isApproving}
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-black font-semibold py-3 rounded-xl transition duration-200 disabled:opacity-50"
+                  >
+                    {isApproving ? 'Approving...' : 'Approve Staking'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStake}
+                    disabled={isStaking || !stakeAmount || parseFloat(stakeAmount) <= 0}
+                    className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold py-3 rounded-xl transition duration-200 disabled:opacity-50"
+                  >
+                    {isStaking ? 'Staking...' : 'Stake AFRODEX'}
+                  </button>
+                )}
+              </div>
+
+              {/* Unstake Card */}
+              <div className="staking-card p-6">
+                <h3 className="text-2xl font-bold text-amber-500 mb-4">Unstake & Claim</h3>
+                <input
+                  type="number"
+                  placeholder="Amount to Unstake"
+                  value={unstakeAmount}
+                  onChange={(e) => setUnstakeAmount(e.target.value)}
+                  className="w-full p-3 mb-4 rounded-lg bg-gray-900 border border-gray-700 text-white focus:ring-amber-500 focus:border-amber-500"
+                />
+                <button
+                  onClick={handleUnstake}
+                  disabled={isUnstaking || !unstakeAmount || parseFloat(unstakeAmount) <= 0}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-xl transition duration-200 disabled:opacity-50 mb-3"
+                >
+                  {isUnstaking ? 'Unstaking...' : 'Unstake AFRODEX'}
+                </button>
+                <button
+                  onClick={handleClaimRewards}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl transition duration-200"
+                >
+                  Claim Rewards Only
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      <footer className="w-full py-4 text-center text-gray-600 border-t border-gray-800 mt-auto">
+        &copy;2019- {new Date().getFullYear()} AfroDex. All rights reserved.
+      </footer>
     </div>
   );
 };
