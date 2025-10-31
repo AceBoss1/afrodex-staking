@@ -9,11 +9,12 @@ import {
   useApproveStaking,
   useStake,
   useUnstake,
+  StakeInfo, // <-- Importing the necessary type
 } from '../hooks/useStaking';
 
 // Constants
 const TOKEN_DECIMALS = 18;
-// CORRECTION: Replaced BigInt literal with string to avoid ES2020 type error
+// CORRECTION: Replaced BigInt literal with string for compatibility
 const MAX_UINT_256_STRING = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 
 // --- UI Components ---
@@ -45,7 +46,8 @@ export const AfroDexStakingComponent: React.FC = () => {
   // --- Wagmi Hooks (Called Unconditionally) ---
   const { data: tokenBalance, refetch: refetchTokenBalance } = useAfrodexTokenBalance(userAddress);
   const { data: allowance, refetch: refetchAllowance } = useTokenAllowance(userAddress);
-  const { data: stakeInfo, refetch: refetchStakeInfo } = useStakeInfo(userAddress);
+  // FIX: Type assertion here to ensure TypeScript knows the structure of stakeInfo
+  const { data: stakeInfo, refetch: refetchStakeInfo } = useStakeInfo(userAddress) as { data: StakeInfo | undefined, refetch: () => void };
 
   const { writeContract: writeApprove, isPending: isApproving } = useApproveStaking();
   const { writeContract: writeStake, isPending: isStaking } = useStake();
@@ -108,7 +110,8 @@ export const AfroDexStakingComponent: React.FC = () => {
     // Placeholder logic for claiming rewards (as per contract limitation discussion)
     // We use a custom alert for better UX than window.alert
     const message = 'The "Unstake" function on the contract typically claims rewards along with the stake. If a separate claim function is available later, it will be implemented here.';
-    alert(message); // Using a standard alert as a temporary message box placeholder
+    // NOTE: Temporarily using alert() as a placeholder for a custom modal message box
+    alert(message);
     console.log('Attempted to claim rewards.');
   };
 
