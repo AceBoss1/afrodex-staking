@@ -1,5 +1,4 @@
 import {
-  useAccount,
   useReadContract,
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -12,14 +11,18 @@ import {
 } from '../config/abis';
 import { parseUnits, formatUnits, maxUint256 } from 'viem';
 
-// FIX: Added 'export' so this type can be imported by StakingComponent.tsx
+// --- TYPES ---
+
 /**
  * Helper type for the stake info view function output (stake balance and rewards).
+ * This type MUST be exported for StakingComponent.tsx to import it.
  */
 export interface StakeInfo {
   stakeBalance: bigint;
   rewardValue: bigint;
 }
+
+// --- HOOKS ---
 
 /**
  * Custom hook to read the user's AFRODEX Token balance.
@@ -59,7 +62,7 @@ export const useTokenAllowance = (owner?: `0x${string}`) => {
  * Custom hook to approve the staking contract to spend the user's AFRODEX tokens.
  */
 export const useApproveStaking = () => {
-  const { writeContract, data: hash, isPending: isApproving } = useWriteContract();
+  const { writeContractAsync: writeContract, data: hash, isPending: isApproving } = useWriteContract();
 
   const { isLoading: isWaiting, isSuccess: isApproved, isError: isApprovalError } = useWaitForTransactionReceipt({
     hash,
@@ -78,7 +81,7 @@ export const useApproveStaking = () => {
  * Custom hook to stake AFRODEX tokens into the contract.
  */
 export const useStake = () => {
-  const { writeContract, data: hash, isPending: isStaking } = useWriteContract();
+  const { writeContractAsync: writeContract, data: hash, isPending: isStaking } = useWriteContract();
 
   const { isLoading: isWaiting, isSuccess: isStaked, isError: isStakeError } = useWaitForTransactionReceipt({
     hash,
@@ -106,7 +109,7 @@ export const useStakeInfo = (address?: `0x${string}`) => {
     query: {
       enabled: !!address,
       select: (data) => {
-        // Assume getStakeInfo returns a tuple/array like [stakeBalance, rewardValue]
+        // getStakeInfo is expected to return a tuple/array like [stakeBalance, rewardValue]
         const [stakeBalance, rewardValue] = data as [bigint, bigint];
         return { stakeBalance, rewardValue } as StakeInfo;
       },
@@ -118,7 +121,7 @@ export const useStakeInfo = (address?: `0x${string}`) => {
  * Custom hook to unstake tokens and claim rewards.
  */
 export const useUnstake = () => {
-  const { writeContract, data: hash, isPending: isUnstaking } = useWriteContract();
+  const { writeContractAsync: writeContract, data: hash, isPending: isUnstaking } = useWriteContract();
 
   const { isLoading: isWaiting, isSuccess: isUnstaked, isError: isUnstakeError } = useWaitForTransactionReceipt({
     hash,
