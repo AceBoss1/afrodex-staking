@@ -1,4 +1,7 @@
- // --- Contract ABIs ---
+    // This file contains the ABI definitions and contract addresses for the AfroDex Staking DApp.
+    // NOTE: In a production environment, contract addresses are typically loaded from environment variables (.env.local)
+
+    // --- Contract ABIs ---
 
     // Minimal ERC-20 ABI for interacting with the AFRODEX token (balanceOf, approve)
     export const AFRODEX_TOKEN_ABI = [
