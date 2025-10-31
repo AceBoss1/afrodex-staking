@@ -1,198 +1,131 @@
-// src/hooks/useStaking.ts
-
-import { useState, useMemo, useEffect } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { STAKING_ABI, STAKING_CONTRACT_ADDRESS, AFRODEX_TOKEN_ADDRESS } from '../config/abis';
-import { parseUnits, formatUnits, maxUint256 } from 'viem'; // CORRECTED: Changed MaxUint256 to maxUint256
+import {
+  useAccount,
+  useReadContract,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+} from 'wagmi';
+import {
+  STAKING_ABI,
+  STAKING_CONTRACT_ADDRESS,
+  AFRODEX_TOKEN_ADDRESS,
+  AFRODEX_TOKEN_ABI,
+} from '../config/abis';
+import { parseUnits, formatUnits, maxUint256 } from 'viem';
 
 // Helper type for the stake info view function output
 interface StakeInfo {
   stakeBalance: bigint;
   rewardValue: bigint;
-  lastUnstakeTimestamp: bigint;
-  lastRewardTimestamp: bigint;
 }
 
-// --- Read Hooks ---
-
-const tokenDecimals = 18; // Assuming 18 decimals for the AFRODEX token
-
-// Hook to read the user's AFRODEX token balance and allowance
-export const useTokenData = () => {
-  const { address: userAddress, isConnected } = useAccount();
-
-  // 1. User Token Balance
-  const { data: rawBalance, refetch: refetchBalance } = useReadContract({
-    abi: STAKING_ABI,
+/**
+ * Custom hook to read the user's AFRODEX Token balance.
+ * @param address The address of the user.
+ */
+export const useAfrodexTokenBalance = (address?: `0x${string}`) => {
+  return useReadContract({
     address: AFRODEX_TOKEN_ADDRESS,
+    abi: AFRODEX_TOKEN_ABI,
     functionName: 'balanceOf',
-    args: [userAddress!],
+    args: [address || '0x'],
     query: {
-      enabled: isConnected && !!userAddress,
+      enabled: !!address, // Only run if an address is available
+      select: (data) => data as bigint, // Ensure data is treated as bigint
     },
   });
+};
 
-  // 2. User Allowance for the Staking Contract
-  const { data: rawAllowance, refetch: refetchAllowance } = useReadContract({
-    abi: STAKING_ABI,
+/**
+ * Custom hook to read the amount of AFRODEX the staking contract is allowed to spend.
+ * @param owner The address of the token owner (user).
+ */
+export const useTokenAllowance = (owner?: `0x${string}`) => {
+  return useReadContract({
     address: AFRODEX_TOKEN_ADDRESS,
+    abi: AFRODEX_TOKEN_ABI,
     functionName: 'allowance',
-    args: [userAddress!, STAKING_CONTRACT_ADDRESS],
+    args: [owner || '0x', STAKING_CONTRACT_ADDRESS],
     query: {
-      enabled: isConnected && !!userAddress,
+      enabled: !!owner,
+      select: (data) => data as bigint,
     },
   });
-
-  const formattedBalance = useMemo(() => {
-    if (rawBalance) {
-      return formatUnits(rawBalance as bigint, tokenDecimals);
-    }
-    return '0';
-  }, [rawBalance]);
-
-  // The allowance value (bigint)
-  const allowanceValue = rawAllowance as bigint | undefined;
-
-  return {
-    userBalance: formattedBalance,
-    allowanceValue,
-    refetch: () => {
-      refetchBalance();
-      refetchAllowance();
-    },
-  };
 };
 
-// Hook to read the user's staking information
-export const useStakingInfo = () => {
-  const { address: userAddress, isConnected } = useAccount();
-
-  const { data: rawInfo, refetch: refetchInfo } = useReadContract({
-    abi: STAKING_ABI,
-    address: STAKING_CONTRACT_ADDRESS,
-    functionName: 'viewStakeInfoOf',
-    args: [userAddress!],
-    query: {
-      enabled: isConnected && !!userAddress,
-      // Refetch every 10 seconds for real-time updates (rewards)
-      refetchInterval: 10000, 
-    },
-  });
-
-  const info = rawInfo as StakeInfo | undefined;
-
-  const formattedStakeBalance = useMemo(() => {
-    if (info?.stakeBalance) {
-      return formatUnits(info.stakeBalance, tokenDecimals);
-    }
-    return '0';
-  }, [info]);
-
-  const formattedRewardValue = useMemo(() => {
-    if (info?.rewardValue) {
-      return formatUnits(info.rewardValue, tokenDecimals);
-    }
-    return '0';
-  }, [info]);
-
-  return {
-    stakeBalance: formattedStakeBalance,
-    rewardValue: formattedRewardValue,
-    refetch: refetchInfo,
-  };
-};
-
-// --- Write Hooks (Transactions) ---
-
-// 1. Approve Staking Contract to spend tokens
+/**
+ * Custom hook to approve the staking contract to spend the user's AFRODEX tokens.
+ */
 export const useApproveStaking = () => {
-  const { writeContract, data: hash, isPending, isError, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+  const { writeContract, data: hash, isPending: isApproving } = useWriteContract();
 
-  const approve = () => {
-    writeContract({
-      abi: STAKING_ABI,
-      address: AFRODEX_TOKEN_ADDRESS,
-      functionName: 'approve',
-      args: [STAKING_CONTRACT_ADDRESS, maxUint256], // CORRECTED usage: maxUint256
-    });
-  };
+  const { isLoading: isWaiting, isSuccess: isApproved, isError: isApprovalError } = useWaitForTransactionReceipt({
+    hash,
+  });
 
   return {
-    approve,
+    writeContract: writeContract,
+    isPending: isApproving || isWaiting,
+    isSuccess: isApproved,
+    isError: isApprovalError,
     hash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    isError,
-    error,
   };
 };
 
-// 2. Stake Tokens
+/**
+ * Custom hook to stake AFRODEX tokens into the contract.
+ */
 export const useStake = () => {
-  const [amount, setAmount] = useState<string>('');
-  const { writeContract, data: hash, isPending, isError, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+  const { writeContract, data: hash, isPending: isStaking } = useWriteContract();
 
-  const stake = () => {
-    if (!amount || parseFloat(amount) <= 0) return;
-    try {
-      const amountParsed = parseUnits(amount, tokenDecimals);
-      writeContract({
-        abi: STAKING_ABI,
-        address: STAKING_CONTRACT_ADDRESS,
-        functionName: 'stake',
-        args: [amountParsed],
-      });
-    } catch (e) {
-      console.error('Error parsing stake amount:', e);
-    }
-  };
+  const { isLoading: isWaiting, isSuccess: isStaked, isError: isStakeError } = useWaitForTransactionReceipt({
+    hash,
+  });
 
   return {
-    amount,
-    setAmount,
-    stake,
+    writeContract: writeContract,
+    isPending: isStaking || isWaiting,
+    isSuccess: isStaked,
+    isError: isStakeError,
     hash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    isError,
-    error,
   };
 };
 
-// 3. Unstake (Withdraw) Tokens
-export const useUnstake = () => {
-  const [amount, setAmount] = useState<string>('');
-  const { writeContract, data: hash, isPending, isError, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
+/**
+ * Custom hook to read the user's staking balance and accumulated rewards.
+ * @param address The address of the user.
+ */
+export const useStakeInfo = (address?: `0x${string}`) => {
+  return useReadContract({
+    address: STAKING_CONTRACT_ADDRESS,
+    abi: STAKING_ABI,
+    functionName: 'getStakeInfo',
+    args: [address || '0x'],
+    query: {
+      enabled: !!address,
+      select: (data) => {
+        // Assume getStakeInfo returns a tuple/array like [stakeBalance, rewardValue]
+        const [stakeBalance, rewardValue] = data as [bigint, bigint];
+        return { stakeBalance, rewardValue } as StakeInfo;
+      },
+    },
+  });
+};
 
-  const unstake = () => {
-    if (!amount || parseFloat(amount) <= 0) return;
-    try {
-      const amountParsed = parseUnits(amount, tokenDecimals);
-      writeContract({
-        abi: STAKING_ABI,
-        address: STAKING_CONTRACT_ADDRESS,
-        functionName: 'unstake',
-        args: [amountParsed],
-      });
-    } catch (e) {
-      console.error('Error parsing unstake amount:', e);
-    }
-  };
+/**
+ * Custom hook to unstake tokens and claim rewards.
+ */
+export const useUnstake = () => {
+  const { writeContract, data: hash, isPending: isUnstaking } = useWriteContract();
+
+  const { isLoading: isWaiting, isSuccess: isUnstaked, isError: isUnstakeError } = useWaitForTransactionReceipt({
+    hash,
+  });
 
   return {
-    amount,
-    setAmount,
-    unstake,
+    writeContract: writeContract,
+    isPending: isUnstaking || isWaiting,
+    isSuccess: isUnstaked,
+    isError: isUnstakeError,
     hash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    isError,
-    error,
   };
 };
