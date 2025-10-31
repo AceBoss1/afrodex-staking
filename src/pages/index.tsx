@@ -1,26 +1,19 @@
 // pages/index.tsx
 
-import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Head from 'next/head';
+import AfroDexStakingComponent from '../src/components/StakingComponent';
 
 const Home = () => {
   return (
     <>
       <Head>
         <title>AfroDex Staking Platform</title>
+        <meta name="description" content="Stake AFRODEX tokens and earn rewards." />
+        <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main style={{ padding: '24px' }}>
-        {/* The ConnectButton should still be visible and working */}
-        <ConnectButton /> 
-        
-        {/* Your new content will go here */}
-        <h1>Welcome to the AfroDex Staking Dashboard!</h1> 
-        <p>Start developing your staking logic here.</p>
-        
-        {/* Eventually, you will import and use your custom Staking component here */}
-        {/* <StakingComponent /> */} 
-      </main>
+      {/* The Staking Component handles the wallet connection internally */}
+      <AfroDexStakingComponent />
     </>
   );
 };
