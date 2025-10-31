@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
+// These imports are typically provided by the hosting environment for DApp development.
+// They are kept here for clarity but are the source of the compilation error outside of a configured environment.
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { formatUnits, parseUnits } from 'viem';
@@ -12,7 +14,6 @@ const MAX_UINT_256_STRING = '115792089237316195423570985008687907853269984665640
 
 /**
  * IMPORTANT: Replace these with your actual contract addresses.
- * Note: Removed the 'as `0x${string}`' type assertion to fix the ESLint parsing error in .jsx.
  */
 const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C';
 const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c';
@@ -86,6 +87,10 @@ interface StakeInfo {
   stakeBalance: bigint;
   rewardValue: bigint;
 }
+
+// NOTE: The type annotation `address?: \`0x${string}\`` requires TypeScript/TSX support.
+// In a pure JSX environment, this might cause errors. We are maintaining it here 
+// because it is required for correct wagmi hook typing.
 
 const useAfrodexTokenBalance = (address?: `0x${string}`) => {
   return useReadContract({
