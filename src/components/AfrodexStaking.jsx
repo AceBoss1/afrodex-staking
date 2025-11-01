@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useAccount, useContractRead, useContractWrite, usePrepareContractWrite } from 'wagmi';
-import { ethers } from 'ethers';
+import { parseUnits } from 'viem';
 import { STAKING_ABI, AFRODEX_TOKEN_ABI } from '../lib/abis';
 
 
@@ -18,7 +18,7 @@ const { config: depositConfig } = usePrepareContractWrite({
 address: stakingAddress,
 abi: STAKING_ABI,
 functionName: 'depositToken',
-args: [tokenAddress, ethers.parseUnits(amount || '0', 18)],
+args: [tokenAddress, parseUnits(amount || '0', 18)],
 enabled: Boolean(isConnected && amount),
 });
 
