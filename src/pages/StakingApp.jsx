@@ -7,7 +7,7 @@ import { formatUnits, parseUnits, Address } from 'viem';
 const TOKEN_DECIMALS = 18;
 const MAX_UINT_256_STRING = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
 
-// NOTE: Use your actual deployed contract addresses here.
+
 const AFRODEX_TOKEN_ADDRESS = '0x08130635368AA28b217a4dfb68E1bF8dC525621C'; // Mock
 const STAKING_CONTRACT_ADDRESS = '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c'; // From your screenshot
 
