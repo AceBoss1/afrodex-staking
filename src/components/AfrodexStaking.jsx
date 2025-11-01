@@ -1,9 +1,3 @@
-*/
-
-
-'use client';
-
-
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useAccount, useConnect, useDisconnect, useSigner } from 'wagmi';
@@ -89,3 +83,34 @@ return (
 
 
 {!isConnected ? (
+<Web3Button icon="show" label="Connect Wallet" balance="show" />
+) : (
+<>
+<p className="mb-2">Connected: {address.slice(0, 6)}...{address.slice(-4)}</p>
+<p className="text-sm text-gray-400 mb-2">Balance: {balance} AFRODEX</p>
+<p className="text-sm text-gray-400 mb-4">Allowance: {allowance} AFRODEX</p>
+
+
+<input
+type="number"
+placeholder="Enter amount"
+value={amount}
+onChange={(e) => setAmount(e.target.value)}
+className="w-full p-2 rounded-lg text-black mb-4"
+/>
+
+
+<div className="flex flex-col gap-3">
+<button onClick={approve} className="bg-blue-600 hover:bg-blue-700 p-3 rounded-lg">Approve</button>
+<button onClick={stake} className="bg-green-600 hover:bg-green-700 p-3 rounded-lg">Stake</button>
+<button onClick={withdraw} className="bg-red-600 hover:bg-red-700 p-3 rounded-lg">Withdraw</button>
+</div>
+
+
+{status && <p className="text-green-400 mt-4">{status}</p>}
+</>
+)}
+</div>
+</div>
+);
+}
