@@ -1,4 +1,4 @@
-import '@/styles/globals.css';
+import '../styles/globals.css';
 import { WagmiConfig, createConfig, configureChains } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
 import { alchemyProvider } from 'wagmi/providers/alchemy';
@@ -28,10 +28,8 @@ const ethereumClient = new EthereumClient(wagmiConfig, chains);
 
 
 export default function App({ Component, pageProps }) {
-return (
-<>
-<WagmiConfig config={wagmiConfig}>
-<Component {...pageProps} />
+  return <Component {...pageProps} />;
+}
 </WagmiConfig>
 <Web3Modal projectId={projectId} ethereumClient={ethereumClient} />
 </>
