@@ -1,25 +1,3 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@layer base {
-  /* Enforce the Inter font globally */
-  html {
-    font-family: 'Inter', sans-serif;
-  }
-}
-
-/* Custom utility classes */
-@layer components {
-  /* Card style for the stats and staking inputs */
-  .staking-card {
-    @apply bg-gray-900 p-4 md:p-6 rounded-2xl shadow-xl transition duration-300 border border-gray-700 hover:border-amber-500;
-  }
-}
-
-/* FIX: Global readability enhancement */
-/* Ensure default text is a bright, easily readable color (amber-200/gray-200) */
-body {
-    background-color: #000000;
-    color: #f5f5f5; /* Changed default text to near-white for high contrast */
-}
