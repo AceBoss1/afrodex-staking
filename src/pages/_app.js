@@ -1,32 +1,27 @@
 import '../styles/globals.css';
-import { WagmiConfig, configureChains, createConfig } from 'wagmi';
-import { mainnet } from 'wagmi/chains';
-import { publicProvider } from 'wagmi/providers/public';
-import { RainbowKitProvider, getDefaultWallets } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
+import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit';
+import { WagmiProvider } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { mainnet } from 'wagmi/chains';
 
-
-const { chains, publicClient } = configureChains([mainnet], [publicProvider()]);
-const { connectors } = getDefaultWallets({
-appName: 'Afrodex Staking DApp',
-projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
-chains,
+const config = getDefaultConfig({
+  appName: 'Afrodex Staking DApp',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
+  chains: [mainnet],
+  ssr: true,
 });
 
-
-const wagmiConfig = createConfig({
-autoConnect: true,
-connectors,
-publicClient,
-});
-
+const queryClient = new QueryClient();
 
 export default function App({ Component, pageProps }) {
-return (
-<WagmiConfig config={wagmiConfig}>
-<RainbowKitProvider chains={chains}>
-<Component {...pageProps} />
-</RainbowKitProvider>
-</WagmiConfig>
-);
+  return (
+    <WagmiProvider config={config}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider>
+          <Component {...pageProps} />
+        </RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
+  );
 }
