@@ -3,7 +3,6 @@ import { createConfig, http } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 
-// Using environment variables from .env.local
 const config = getDefaultConfig({
   appName: 'Afrodex Staking DApp',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
