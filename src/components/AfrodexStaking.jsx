@@ -1,3 +1,4 @@
+import { STAKING_ABI, AFRODEX_TOKEN_ABI } from '@/lib/abis';
 import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useAccount, useConnect, useDisconnect, useSigner } from 'wagmi';
