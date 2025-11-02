@@ -1,0 +1,13 @@
+{
+  "build": {
+    "env": {
+      "NPM_CONFIG_ARCH": "x64",
+      "NPM_CONFIG_OS": "linux"
+    }
+  },
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}
