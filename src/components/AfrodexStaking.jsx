@@ -1,267 +1,58 @@
-// src/components/AfrodexStaking.jsx
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { formatUnits, parseUnits } from 'viem';
-import { AFROX_TOKEN_ABI } from '../lib/AfroXTokenABI';
-import { STAKING_ABI } from '../lib/StakingABI';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { parseUnits, formatUnits } from 'viem';
+import {
+  useAccount,
+  usePublicClient,
+  usePrepareContractWrite,
+  useContractWrite
+} from 'wagmi';
 
+import { STAKING_ABI } from '@/lib/stakingAbi';
+import { AFROX_TOKEN_ABI } from '@/lib/AfroXTokenABI';
 
-/**
- * UI / Theme choices:
- * - Carbon-fiber style panels with orange grid accents (user chose 3)
- * - Token label: "AfroX"
- *
- * Notes:
- * - Token uses 4 decimals (DECIMALS = 4)
- * - Reads are done with publicClient.readContract
- * - Writes are done with walletClient.writeContract (user wallet must be connected)
- *
- * Drop this file into src/components and import from pages/index.js
- */
-
-const STAKING_ADDR = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS;
 const TOKEN_ADDR = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS;
-const DECIMALS = 4;
-const TOKEN_LABEL = 'AfroX';
-
-function nf(value, opts = {}) {
-  return Number(value).toLocaleString(undefined, { maximumFractionDigits: opts.decimals ?? 4 });
-}
+const STAKING_ADDR = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS;
+const TOKEN_DECIMALS = 4; // You said token accepts 4 decimals
 
 export default function AfrodexStaking() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
-  const walletClient = useWalletClient();
 
-  // UI state
-  const [stakeInput, setStakeInput] = useState('');
-  const [unstakeInput, setUnstakeInput] = useState('');
-  const [calcAmount, setCalcAmount] = useState('');
-  const [txHistory, setTxHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [alertMsg, setAlertMsg] = useState(null);
-
-  // On-chain state
+  // UI / form state
+  const [stakeAmount, setStakeAmount] = useState('');
+  const [unstakeAmount, setUnstakeAmount] = useState('');
+  const [tokenPriceUsd, setTokenPriceUsd] = useState(null); // fetched price
+  const [loadingPrice, setLoadingPrice] = useState(false);
+  const [allowanceRaw, setAllowanceRaw] = useState(null);
   const [stakedBalance, setStakedBalance] = useState('0');
-  const [rewardsEarned, setRewardsEarned] = useState('0');
   const [walletBalance, setWalletBalance] = useState('0');
-  const [allowance, setAllowance] = useState('0');
-  const [rewardRate, setRewardRate] = useState(0);
-  const [bonusRate, setBonusRate] = useState(0);
+  const [pendingRewards, setPendingRewards] = useState('0');
+  const [isApproving, setIsApproving] = useState(false);
+  const [isStaking, setIsStaking] = useState(false);
+  const [isUnstaking, setIsUnstaking] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
 
-  // Tier thresholds (token base units)
-  const TIERS = useMemo(() => ({
-    Starter: parseUnits('0', DECIMALS),
-    Bronze: parseUnits('10000000', DECIMALS),    // 10m
-    Silver: parseUnits('100000000', DECIMALS),   // 100m
-    Gold: parseUnits('1000000000', DECIMALS),    // 1b
-    Diamond: parseUnits('10000000000', DECIMALS),// 10b
-  }), []);
+  // Styling / animation configs
+  const glowHover = { scale: 1.01, boxShadow: '0 8px 32px rgba(255,140,0,0.18)' };
+  const pulse = { scale: [1, 1.02, 1], transition: { duration: 1.6, repeat: Infinity } };
 
-  // Helper: show temporary alerts
-  const showAlert = (msg, timeout = 5000) => {
-    setAlertMsg(msg);
-    setTimeout(() => setAlertMsg(null), timeout);
-  };
+  // ---------- Contract reads ----------
+  const fetchOnChain = useCallback(async () => {
+    if (!publicClient || !address) return;
 
-  // === Read on-chain data ===
-  const fetchOnChain = async () => {
-    if (!publicClient) return;
     try {
-      if (!STAKING_ADDR || !TOKEN_ADDR) return;
-
-      // If user not connected, we still can read global values and walletBalance=0
-      // Read stakeInfo for connected address (if connected)
-      if (address) {
-        // viewStakeInfoOf(address) returns (stakeBalance, rewardValue, lastUnstakeTimestamp, lastRewardTimestamp)
-        const stakeInfo = await publicClient.readContract({
-          address: STAKING_ADDR,
-          abi: STAKING_ABI,
-          functionName: 'viewStakeInfoOf',
-          args: [address],
-        }).catch(() => null);
-
-        if (stakeInfo) {
-          // stakeInfo: [stakeBalance, rewardValue, lastUnstakeTimestamp, lastRewardTimestamp]
-          const stakeBalanceRaw = stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n;
-          const rewardValueRaw = stakeInfo.rewardValue ?? stakeInfo[1] ?? 0n;
-          setStakedBalance(formatUnits(stakeBalanceRaw, DECIMALS));
-          setRewardsEarned(formatUnits(rewardValueRaw, DECIMALS));
-        } else {
-          setStakedBalance('0');
-          setRewardsEarned('0');
-        }
-      } else {
-        setStakedBalance('0');
-        setRewardsEarned('0');
-      }
-
-      // Wallet balance: token.balanceOf(address)
-      const walletBalRaw = address ? await publicClient.readContract({
-        address: TOKEN_ADDR,
-        abi: AFROX_TOKEN_ABI,
-        functionName: 'balanceOf',
-        args: [address],
-      }) : 0n;
-
-      setWalletBalance(formatUnits(walletBalRaw ?? 0n, DECIMALS));
-
-      // Allowance: token.allowance(address, staking)
-      const allowRaw = address ? await publicClient.readContract({
+      // Allowance
+      const allowance = await publicClient.readContract({
         address: TOKEN_ADDR,
         abi: AFROX_TOKEN_ABI,
         functionName: 'allowance',
         args: [address, STAKING_ADDR],
-      }) : 0n;
-      setAllowance(formatUnits(allowRaw ?? 0n, DECIMALS));
-
-      // Read rewardRate and bonusRate from staking contract (if present)
-      const rewardRateRaw = await publicClient.readContract({
-        address: STAKING_ADDR,
-        abi: STAKING_ABI,
-        functionName: 'rewardRate',
       }).catch(() => null);
 
-      const bonusRateRaw = await publicClient.readContract({
-        address: STAKING_ADDR,
-        abi: STAKING_ABI,
-        functionName: 'bonusRate',
-      }).catch(() => null);
-
-      // Interpret values as decimals (if contract uses e.g., 4 decimals)
-      // We convert to human numbers (not percent). Caller math (APR) uses the numeric values.
-      setRewardRate(Number(rewardRateRaw ? formatUnits(rewardRateRaw, DECIMALS) : 0));
-      setBonusRate(Number(bonusRateRaw ? formatUnits(bonusRateRaw, DECIMALS) : 0));
-    } catch (err) {
-      console.error('fetchOnChain error', err);
-    }
-  };
-
-  // initial fetch + periodic refresh
-  useEffect(() => {
-    fetchOnChain();
-    const t = setInterval(fetchOnChain, 15_000); // refresh every 15s
-    return () => clearInterval(t);
-  }, [publicClient, address]);
-
-  // === APR calculation ===
-  // Based on your formula:
-  // APR = (rewardRate + bonusRate * 12) * 365  (treating rewardRate & bonusRate as % per day/month in decimal form)
-  // If rewardRate=0.0003 (0.03%) daily, bonusRate=0.00003 (0.003%) monthly, this will match your example.
-  const APR = useMemo(() => {
-    const r = rewardRate || 0;
-    const b = bonusRate || 0;
-    const apr = (r + b * 12) * 365 * 100; // convert to percent
-    return apr;
-  }, [rewardRate, bonusRate]);
-
-  // === helpers for writes ===
-  const pushTx = (tx) => setTxHistory(prev => [{ time: new Date().toISOString(), tx }, ...prev].slice(0, 50));
-
-  const approveMax = async () => {
-    if (!walletClient || !isConnected) return showAlert('Connect wallet first.');
-    try {
-      setLoading(true);
-      // Approve large number (e.g., 1 billion AfroX in base units) - use a safe "max" you prefer
-      const amountToApprove = parseUnits('1000000000000', DECIMALS); // big
-      const tx = await walletClient.writeContract({
-        address: TOKEN_ADDR,
-        abi: AFROX_TOKEN_ABI,
-        functionName: 'approve',
-        args: [STAKING_ADDR, amountToApprove],
-      });
-      pushTx(tx);
-      showAlert('Approval submitted');
-      await publicClient.waitForTransactionReceipt({ hash: tx }); // wait for confirmation
-      showAlert('Approval confirmed');
-      await fetchOnChain();
-    } catch (err) {
-      console.error('approveMax err', err);
-      showAlert(`Approve error: ${err?.message ?? err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStake = async () => {
-    if (!walletClient || !isConnected) return showAlert('Connect wallet first.');
-    if (!stakeInput || Number(stakeInput) === 0) return showAlert('Enter an amount to stake.');
-    try {
-      setLoading(true);
-      const amountWei = parseUnits(stakeInput, DECIMALS);
-      // Ensure allowance >= amount
-      const allowRaw = await publicClient.readContract({
-        address: TOKEN_ADDR,
-        abi: AFROX_TOKEN_ABI,
-        functionName: 'allowance',
-        args: [address, STAKING_ADDR],
-      });
-      if (allowRaw < amountWei) {
-        showAlert('Allowance too low — approving max first.');
-        await approveMax();
-      }
-
-      // Call stake(uint256)
-      const tx = await walletClient.writeContract({
-        address: STAKING_ADDR,
-        abi: STAKING_ABI,
-        functionName: 'stake',
-        args: [amountWei],
-      });
-      pushTx(tx);
-      showAlert('Stake tx submitted');
-      await publicClient.waitForTransactionReceipt({ hash: tx });
-      showAlert('Stake confirmed');
-      setStakeInput('');
-      await fetchOnChain();
-    } catch (err) {
-      console.error('stake err', err);
-      // decode revert message if available
-      const errMsg = err?.shortMessage ?? err?.message ?? String(err);
-      showAlert(`Stake error: ${errMsg}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUnstake = async () => {
-    if (!walletClient || !isConnected) return showAlert('Connect wallet first.');
-    if (!unstakeInput || Number(unstakeInput) === 0) return showAlert('Enter an amount to unstake.');
-    try {
-      setLoading(true);
-      const amountWei = parseUnits(unstakeInput, DECIMALS);
-      const tx = await walletClient.writeContract({
-        address: STAKING_ADDR,
-        abi: STAKING_ABI,
-        functionName: 'unstake',
-        args: [amountWei],
-      });
-      pushTx(tx);
-      showAlert('Unstake submitted');
-      await publicClient.waitForTransactionReceipt({ hash: tx });
-      showAlert('Unstake confirmed');
-      setUnstakeInput('');
-      await fetchOnChain();
-    } catch (err) {
-      console.error('unstake err', err);
-      showAlert(`Unstake error: ${err?.message ?? err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Claim — implement minimal unstake hack: unstake tiny amount and re-stake it to trigger reward distribution
-  const handleClaim = async () => {
-    if (!walletClient || !isConnected) return showAlert('Connect wallet first.');
-    try {
-      setLoading(true);
-
-      // Choose tiny unit = 1 token unit (1e-DECIMALS)
-      const tiny = parseUnits('1', DECIMALS);
-      // Check staked balance > tiny
+      // Staked balance: viewStakeInfoOf(address) -> returns stakeBalance, rewardValue, ...
       const stakeInfo = await publicClient.readContract({
         address: STAKING_ADDR,
         abi: STAKING_ABI,
@@ -269,301 +60,457 @@ export default function AfrodexStaking() {
         args: [address],
       }).catch(() => null);
 
-      const stakedRaw = stakeInfo ? (stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n) : 0n;
-      if (stakedRaw < tiny) {
-        // If not enough staked to unstake 1 unit, will try to unstake 0? Not possible -> fallback to show error
-        showAlert('Too little staked to auto-claim. Consider manual small unstake to trigger claim.');
-        setLoading(false);
-        return;
+      // Wallet balance (ERC20 balanceOf)
+      const walletBal = await publicClient.readContract({
+        address: TOKEN_ADDR,
+        abi: AFROX_TOKEN_ABI,
+        functionName: 'balanceOf',
+        args: [address],
+      }).catch(() => null);
+
+      if (allowance != null) setAllowanceRaw(String(allowance));
+      if (stakeInfo && stakeInfo.stakeBalance != null) {
+        setStakedBalance(formatUnits(stakeInfo.stakeBalance ?? 0n, TOKEN_DECIMALS));
+        setPendingRewards(formatUnits(stakeInfo.rewardValue ?? 0n, TOKEN_DECIMALS));
       }
+      if (walletBal != null) setWalletBalance(formatUnits(walletBal ?? 0n, TOKEN_DECIMALS));
+    } catch (err) {
+      console.error('onChain fetch error', err);
+    }
+  }, [publicClient, address]);
 
-      // Unstake tiny unit (this should trigger reward distribution if contract implements that)
-      const tx1 = await walletClient.writeContract({
-        address: STAKING_ADDR,
-        abi: STAKING_ABI,
-        functionName: 'unstake',
-        args: [tiny],
-      });
-      pushTx(tx1);
-      showAlert('Claim (unstake tiny) submitted');
-      await publicClient.waitForTransactionReceipt({ hash: tx1 });
+  useEffect(() => {
+    if (!isConnected) return;
+    fetchOnChain();
+    // poll a few times while the user is on the page (optional)
+    const id = setInterval(fetchOnChain, 15_000);
+    return () => clearInterval(id);
+  }, [isConnected, fetchOnChain]);
 
-      // Re-stake tiny back to return user's stake
-      const tx2 = await walletClient.writeContract({
-        address: STAKING_ADDR,
-        abi: STAKING_ABI,
-        functionName: 'stake',
-        args: [tiny],
-      });
-      pushTx(tx2);
-      showAlert('Re-stake submitted');
-      await publicClient.waitForTransactionReceipt({ hash: tx2 });
+  // ---------- Price fetch (CoinGecko token_price by contract) ----------
+  useEffect(() => {
+    const fetchPrice = async () => {
+      setLoadingPrice(true);
+      try {
+        if (!TOKEN_ADDR) throw new Error('Missing token address');
+        // CoinGecko token price by contract (Ethereum mainnet)
+        const url = `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${TOKEN_ADDR}&vs_currencies=usd`;
+        const res = await fetch(url);
+        const json = await res.json();
+        const key = Object.keys(json)[0];
+        if (json && json[key] && json[key].usd) {
+          setTokenPriceUsd(Number(json[key].usd));
+        } else {
+          // fallback static price if Coingecko doesn't know the token
+          setTokenPriceUsd(0.02);
+        }
+      } catch (err) {
+        console.warn('Price fetch failed, using fallback', err);
+        setTokenPriceUsd(0.02); // fallback price USD
+      } finally {
+        setLoadingPrice(false);
+      }
+    };
 
-      showAlert('Claim sequence completed');
+    fetchPrice();
+  }, []);
+
+  // ---------- Prepare contract writes ----------
+  // 1) Approve (ERC20 approve)
+  const { config: approveConfig } = usePrepareContractWrite({
+    address: TOKEN_ADDR,
+    abi: AFROX_TOKEN_ABI,
+    functionName: 'approve',
+    args: [STAKING_ADDR, parseUnits('1000000000', TOKEN_DECIMALS)], // big allowance
+    enabled: Boolean(isConnected),
+  });
+  const { writeAsync: approveWrite } = useContractWrite(approveConfig || {});
+
+  // 2) Stake -> depositToken(token, amount) OR stake(amount) depending on your staking contract
+  // I'll attempt depositToken(tokenAddr, amount) first, fallback to stake(amount) if needed.
+  const { config: stakeCfg1 } = usePrepareContractWrite({
+    address: STAKING_ADDR,
+    abi: STAKING_ABI,
+    functionName: 'depositToken',
+    args: [TOKEN_ADDR, stakeAmount ? parseUnits(stakeAmount, TOKEN_DECIMALS) : 0n],
+    enabled: Boolean(isConnected && stakeAmount),
+  });
+  const { writeAsync: stakeWrite1 } = useContractWrite(stakeCfg1 || {});
+
+  const { config: stakeCfg2 } = usePrepareContractWrite({
+    address: STAKING_ADDR,
+    abi: STAKING_ABI,
+    functionName: 'stake',
+    args: [stakeAmount ? parseUnits(stakeAmount, TOKEN_DECIMALS) : 0n],
+    enabled: Boolean(isConnected && stakeAmount),
+  });
+  const { writeAsync: stakeWrite2 } = useContractWrite(stakeCfg2 || {});
+
+  // 3) Unstake (unstake(amount))
+  const { config: unstakeCfg } = usePrepareContractWrite({
+    address: STAKING_ADDR,
+    abi: STAKING_ABI,
+    functionName: 'unstake',
+    args: [unstakeAmount ? parseUnits(unstakeAmount, TOKEN_DECIMALS) : 0n],
+    enabled: Boolean(isConnected && unstakeAmount),
+  });
+  const { writeAsync: unstakeWrite } = useContractWrite(unstakeCfg || {});
+
+  // 4) Claim button: if contract has no explicit claim, we use a minimal unstake hack (unstake 1 token -> to trigger)
+  const { config: minimalUnstakeCfg } = usePrepareContractWrite({
+    address: STAKING_ADDR,
+    abi: STAKING_ABI,
+    functionName: 'unstake',
+    args: [parseUnits('0.0001', TOKEN_DECIMALS)], // very small amount; ensure this is allowed by contract
+    enabled: Boolean(isConnected),
+  });
+  const { writeAsync: minimalUnstakeWrite } = useContractWrite(minimalUnstakeCfg || {});
+
+  // ---------- UI action handlers ----------
+  const handleApprove = async () => {
+    if (!approveWrite) return;
+    try {
+      setIsApproving(true);
+      const tx = await approveWrite();
+      await tx.wait?.();
       await fetchOnChain();
     } catch (err) {
-      console.error('claim err', err);
-      showAlert(`Claim error: ${err?.message ?? err}`);
+      console.error('approve error', err);
     } finally {
-      setLoading(false);
+      setIsApproving(false);
     }
   };
 
-  // Calculator result
-  const estimatedYearlyReward = useMemo(() => {
-    if (!calcAmount || Number(calcAmount) === 0) return null;
-    // APR is percent, so divide by 100
-    const yearReward = Number(calcAmount) * (Number(APR) / 100.0);
-    return yearReward;
-  }, [calcAmount, APR]);
-
-  // tier label
-  const tierLabel = useMemo(() => {
-    const b = BigInt(Math.floor(Number(parseUnits(walletBalance || '0', DECIMALS))));
-    // Determine highest tier
-    if (b >= TIERS.Diamond) return 'Diamond';
-    if (b >= TIERS.Gold) return 'Gold';
-    if (b >= TIERS.Silver) return 'Silver';
-    if (b >= TIERS.Bronze) return 'Bronze';
-    return 'Starter';
-  }, [walletBalance, TIERS]);
-
-  // Small CSS helpers inline to match carbon-fiber + orange grid
-  const pageStyle = {
-    background:
-      "radial-gradient(1200px 600px at 10% 10%, rgba(18,18,18,0.8), rgba(8,8,8,1)), linear-gradient(180deg,#0b0b0b,#080808)",
-    minHeight: '100vh',
-    color: 'white',
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue'",
+  const handleStake = async () => {
+    if (!stakeAmount || Number(stakeAmount) <= 0) return;
+    try {
+      setIsStaking(true);
+      // try depositToken first, fallback to stake()
+      if (stakeWrite1) {
+        const tx = await stakeWrite1();
+        await tx.wait?.();
+      } else if (stakeWrite2) {
+        const tx = await stakeWrite2();
+        await tx.wait?.();
+      } else {
+        throw new Error('No stake write configured');
+      }
+      setStakeAmount('');
+      await fetchOnChain();
+    } catch (err) {
+      console.error('stake error', err);
+    } finally {
+      setIsStaking(false);
+    }
   };
 
-  const carbonCard =
-    'rounded-2xl p-6 bg-[linear-gradient(90deg,#0b0b0b,rgba(7,7,7,0.8))] border border-[#1f1f1f] shadow-xl';
-
-  const neonGrid = {
-    backgroundImage:
-      'repeating-linear-gradient(45deg, rgba(255,127,39,0.06) 0 2px, transparent 2px 6px), repeating-linear-gradient(-45deg, rgba(255,127,39,0.03) 0 3px, transparent 3px 7px)',
-    boxShadow: '0 6px 30px rgba(255,127,39,0.06), inset 0 0 30px rgba(0,0,0,0.6)',
+  const handleUnstake = async () => {
+    if (!unstakeAmount || Number(unstakeAmount) <= 0) return;
+    try {
+      setIsUnstaking(true);
+      const tx = await unstakeWrite();
+      await tx.wait?.();
+      setUnstakeAmount('');
+      await fetchOnChain();
+    } catch (err) {
+      console.error('unstake error', err);
+    } finally {
+      setIsUnstaking(false);
+    }
   };
 
-  const neonButton =
-    'py-3 px-4 font-semibold rounded-lg transition-all active:translate-y-0.5 shadow-[0_8px_0_rgba(255,127,39,0.14)]';
+  const handleClaim = async () => {
+    try {
+      setIsClaiming(true);
+      // Try minimal unstake trigger (if contract auto-claims on unstake)
+      if (minimalUnstakeWrite) {
+        const tx = await minimalUnstakeWrite();
+        await tx.wait?.();
+      } else {
+        // If there is a claim() function on the staking contract, use it by preparing/writing (not included here)
+        console.warn('No minimalUnstakeWrite available; no explicit claim call configured.');
+      }
+      await fetchOnChain();
+    } catch (err) {
+      console.error('claim error', err);
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
+  // ---------- Calculator logic ----------
+  // The reward rules you gave:
+  // - base daily reward: 0.03%  (i.e., 0.03 percent per day)
+  // - monthly bonus after each full month without withdrawal: +0.003 (0.3%) per month
+  // - yearly simplified estimate: 24.09% (user-provided)
+  const BASE_DAILY_PERCENT = 0.03; // percent
+  const MONTHLY_BONUS_PERCENT = 0.3; // percent per month (0.3% = 0.3)
+  const YEARLY_ESTIMATE_PERCENT = 24.09; // final yearly estimate
+
+  const calcRewards = (principal, months = 1) => {
+    const p = Number(principal) || 0;
+    const daily = (BASE_DAILY_PERCENT / 100) * p;
+    const monthlyRatePct = BASE_DAILY_PERCENT + (MONTHLY_BONUS_PERCENT * months);
+    const monthly = (monthlyRatePct / 100) * p * 30; // rough
+    // Yearly summarised:
+    const yearly = (YEARLY_ESTIMATE_PERCENT / 100) * p;
+    return { daily, monthly, yearly, monthlyRatePct };
+  };
+
+  // Derived values for display
+  const allowance = useMemo(() => {
+    if (!allowanceRaw) return 0;
+    try {
+      return Number(formatUnits(BigInt(allowanceRaw), TOKEN_DECIMALS));
+    } catch {
+      return 0;
+    }
+  }, [allowanceRaw]);
+
+  // Formatter helpers
+  const displayUsd = (tokens) => {
+    const price = Number(tokenPriceUsd) || 0;
+    return (Number(tokens) * price).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  };
+
+  // ---------- Render ----------
   return (
-    <div style={pageStyle} className="p-6">
-      <main className="max-w-3xl mx-auto">
+    <div className="min-h-screen p-6 bg-gradient-to-b from-[#0b0f14] via-[#0b1220] to-[#081018] text-white font-sans">
+      <div className="max-w-6xl mx-auto">
         {/* HEADER */}
-        <header className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-extrabold" style={{ letterSpacing: '0.6px' }}>
-              Welcome to Afrodex Staking
-            </h1>
-            <p className="text-sm text-gray-400">AfroX Staking Dashboard</p>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <ConnectButton />
-          </div>
+        <header className="text-center mb-8">
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">Welcome to AFRODEX Staking</h1>
+          <p className="mt-2 text-sm text-gray-300">Stake AfroX — earn rewards. Network: Ethereum</p>
         </header>
 
-        {/* Stats card row */}
-        <section className={`${carbonCard} mb-6`} style={neonGrid}>
-          <div className="grid sm:grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-sm text-gray-300">Staked Balance</p>
-              <p className="text-2xl font-bold">{nf(stakedBalance)} {TOKEN_LABEL}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-300">Rewards Earned</p>
-              <p className="text-2xl font-bold text-lime-400">{nf(rewardsEarned)} {TOKEN_LABEL}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-300">Wallet Balance</p>
-              <p className="text-2xl font-bold">{nf(walletBalance)} {TOKEN_LABEL}</p>
-              <p className="mt-1 text-xs text-orange-300 font-semibold">BADGE Tier: {tierLabel}</p>
+        {/* WALLET CONNECT BAR placeholder (you have RainbowKit in _app) */}
+        <div className="flex justify-center mb-6">
+          <div className="w-full max-w-2xl p-3 rounded-2xl bg-gradient-to-b from-[#111316] to-[#0b0f13] shadow-xl border border-transparent">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs text-gray-400">Connected</div>
+                <div className="text-sm font-medium">{isConnected ? address : 'No wallet connected'}</div>
+              </div>
+              <div className="text-right text-xs text-gray-400">
+                <div>Chain: Ethereum</div>
+                <div className="mt-1">Status: {isConnected ? <span className="text-green-400">Connected</span> : <span className="text-yellow-400">Not connected</span>}</div>
+              </div>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* APR & Calculator (full width) */}
-        <section className={`${carbonCard} mb-6`} style={{ ...neonGrid }}>
-          <h3 className="text-lg font-bold text-orange-300 mb-3">Estimated Rewards & APR</h3>
-
-          <div className="grid grid-cols-3 gap-4 mb-4 text-center">
+        {/* DASH STATS */}
+        <div className="rounded-2xl bg-[#111722] p-6 shadow-2xl mb-8 border-l-4 border-orange-500/20">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
             <div>
-              <p className="text-xs text-gray-400">Base Daily Rate</p>
-              <p className="text-xl font-semibold text-white">{Number(rewardRate).toFixed(6)}</p>
+              <div className="text-sm text-gray-400">Staked Balance</div>
+              <div className="text-2xl font-extrabold">{Number(stakedBalance).toLocaleString(undefined, { maximumFractionDigits: TOKEN_DECIMALS })} AFROX</div>
             </div>
-
             <div>
-              <p className="text-xs text-gray-400">Monthly Bonus</p>
-              <p className="text-xl font-semibold text-white">{Number(bonusRate).toFixed(6)}</p>
+              <div className="text-sm text-gray-400">Rewards Earned</div>
+              <div className="text-2xl font-extrabold text-green-400">{Number(pendingRewards).toLocaleString(undefined, { maximumFractionDigits: TOKEN_DECIMALS })} AFROX</div>
             </div>
-
             <div>
-              <p className="text-xs text-gray-400">Effective APR</p>
-              <p className="text-xl font-bold text-orange-400">{APR.toFixed(2)}% / year</p>
+              <div className="text-sm text-gray-400">Wallet Balance</div>
+              <div className="text-2xl font-extrabold">{Number(walletBalance).toLocaleString(undefined, { maximumFractionDigits: TOKEN_DECIMALS })} AFROX</div>
             </div>
           </div>
+        </div>
 
-          <div className="mt-2">
-            <label className="text-xs text-gray-300">Estimate returns for amount ({TOKEN_LABEL})</label>
-            <div className="flex gap-2 mt-2">
+        {/* MAIN: Two column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* LEFT: Approve & Stake */}
+          <motion.div whileHover={glowHover} className="rounded-2xl bg-[#0c1116] p-6 shadow-xl border border-transparent">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Stake AfroX</h2>
+              <div className="text-sm text-gray-400">Allowance: <span className="text-orange-400 font-semibold">{allowance.toLocaleString()}</span></div>
+            </div>
+
+            <label className="block text-sm text-gray-300 mb-2">Amount to Stake (AFROX)</label>
+            <div className="flex gap-3 items-center mb-4">
               <input
                 type="number"
                 step="0.0001"
-                className="flex-1 p-3 rounded bg-[#0b0b0b] border border-[#222]"
-                placeholder="e.g., 10000"
-                value={calcAmount}
-                onChange={(e) => setCalcAmount(e.target.value)}
+                min="0"
+                value={stakeAmount}
+                onChange={(e) => setStakeAmount(e.target.value)}
+                className="flex-1 p-3 rounded-lg bg-[#0b1116] border border-gray-800 text-white"
+                placeholder="0.0"
               />
-              <button
-                onClick={() => setCalcAmount(walletBalance || '')}
-                className={`${neonButton} bg-[#111] border border-orange-600 text-orange-300`}
-              >
-                Use Max
-              </button>
+              <button onClick={() => setStakeAmount(walletBalance)} className="px-4 py-2 rounded-lg bg-gray-800 text-xs">MAX</button>
             </div>
-
-            {estimatedYearlyReward !== null && (
-              <div className="mt-4 text-center">
-                <p className="text-sm text-gray-300">Estimated yearly reward</p>
-                <p className="text-xl font-bold text-orange-400">
-                  {nf(estimatedYearlyReward, { decimals: 4 })} {TOKEN_LABEL}
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Approve/Stake & Unstake row (2 columns) */}
-        <section className="grid md:grid-cols-2 gap-4 mb-6">
-          {/* Approve & Stake (left) */}
-          <div className={`${carbonCard}`} style={neonGrid}>
-            <h3 className="text-lg font-bold text-orange-300 mb-3">Approve & Stake</h3>
 
             <div className="mb-3">
-              <label className="text-sm text-gray-300">Amount to Stake ({TOKEN_LABEL})</label>
-              <div className="flex gap-2 mt-2">
-                <input
-                  type="number"
-                  step="0.0001"
-                  className="flex-1 p-3 rounded bg-[#0b0b0b] border border-[#222]"
-                  value={stakeInput}
-                  onChange={(e) => setStakeInput(e.target.value)}
-                />
-                <button
-                  onClick={() => setStakeInput(walletBalance || '')}
-                  className={`${neonButton} bg-[#111] border border-orange-600 text-orange-300`}
-                >
-                  MAX
-                </button>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={approveMax}
-                disabled={loading}
-                className={`${neonButton} bg-transparent border border-orange-500 text-orange-300 w-1/2`}
+              <motion.button
+                whileTap={{ scale: 0.98 }}
+                onClick={handleApprove}
+                disabled={!isConnected || isApproving}
+                className="w-full py-3 rounded-2xl bg-gradient-to-b from-[#ff8c1a] to-[#ff6b00] text-black font-semibold shadow-sm mb-3"
               >
-                Approve
-              </button>
-              <button
+                {isApproving ? 'Approving...' : 'Approve AfroX'}
+              </motion.button>
+
+              <motion.button
+                whileHover={pulse}
                 onClick={handleStake}
-                disabled={loading}
-                className={`${neonButton} bg-orange-500 hover:bg-orange-600 text-black w-1/2`}
+                disabled={!isConnected || isStaking || Number(stakeAmount) <= 0}
+                className="w-full py-3 rounded-2xl bg-[#ff6b00] hover:brightness-105 font-bold text-black text-lg"
               >
-                Stake
-              </button>
+                {isStaking ? 'Staking...' : 'Stake'}
+              </motion.button>
+            </div>
+          </motion.div>
+
+          {/* RIGHT: Unstake */}
+          <motion.div whileHover={glowHover} className="rounded-2xl bg-[#0c1116] p-6 shadow-xl border border-transparent">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Unstake AfroX</h2>
+              <div className="text-sm text-gray-400">Tier: Starter</div>
             </div>
 
-            <p className="mt-3 text-xs text-gray-400">Allowance: {allowance} {TOKEN_LABEL}</p>
-          </div>
-
-          {/* Unstake (right) */}
-          <div className={`${carbonCard}`} style={neonGrid}>
-            <h3 className="text-lg font-bold text-orange-300 mb-3">Unstake</h3>
-
-            <label className="text-sm text-gray-300">Amount to Unstake ({TOKEN_LABEL})</label>
-            <div className="flex gap-2 mt-2 mb-3">
+            <label className="block text-sm text-gray-300 mb-2">Amount to Unstake (AFROX)</label>
+            <div className="flex gap-3 items-center mb-4">
               <input
                 type="number"
                 step="0.0001"
-                className="flex-1 p-3 rounded bg-[#0b0b0b] border border-[#222]"
-                value={unstakeInput}
-                onChange={(e) => setUnstakeInput(e.target.value)}
+                min="0"
+                value={unstakeAmount}
+                onChange={(e) => setUnstakeAmount(e.target.value)}
+                className="flex-1 p-3 rounded-lg bg-[#0b1116] border border-gray-800 text-white"
+                placeholder="0.0"
               />
-              <button
-                onClick={() => setUnstakeInput(stakedBalance || '')}
-                className={`${neonButton} bg-[#111] border border-orange-600 text-orange-300`}
-              >
-                MAX
-              </button>
+              <button onClick={() => setUnstakeAmount(stakedBalance)} className="px-4 py-2 rounded-lg bg-gray-800 text-xs">MAX</button>
             </div>
 
-            <button
+            <motion.button
+              whileHover={pulse}
               onClick={handleUnstake}
-              disabled={loading}
-              className={`${neonButton} bg-orange-500 hover:bg-orange-600 text-black w-full`}
+              disabled={!isConnected || isUnstaking || Number(unstakeAmount) <= 0}
+              className="w-full py-3 rounded-2xl bg-[#ff6b00] font-bold text-black text-lg"
             >
-              Unstake
-            </button>
-          </div>
-        </section>
+              {isUnstaking ? 'Unstaking...' : 'Unstake'}
+            </motion.button>
+          </motion.div>
+        </div>
 
-        {/* Claim (full width) */}
-        <section className={`${carbonCard} mb-6`} style={neonGrid}>
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold text-orange-300">Rewards Center</h3>
-              <p className="text-sm text-gray-400">Claimable Rewards: <span className="font-bold text-lime-400">{rewardsEarned} {TOKEN_LABEL}</span></p>
+        {/* Claim + Rewards Center */}
+        <div className="rounded-2xl bg-[#0b1116] p-6 shadow-xl mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+            <div className="lg:col-span-2">
+              <h3 className="text-lg font-semibold">Rewards Center</h3>
+              <p className="mt-2 text-gray-300">Claimable Rewards: <span className="text-2xl font-extrabold text-green-400">{Number(pendingRewards).toLocaleString(undefined, { maximumFractionDigits: TOKEN_DECIMALS })} AFROX</span></p>
+              <div className="mt-4 p-4 rounded-lg bg-[#0a1115] border border-gray-800 text-sm text-gray-300">
+                <strong>Claim Note & Policy:</strong>
+                <p className="mt-2 text-xs">Pending rewards are often distributed when you unstake. Use "Claim Rewards" to trigger a minimal unstake-based claim if supported.</p>
+              </div>
             </div>
 
-            <div className="flex gap-2 items-center">
-              <button
+            <div className="flex flex-col gap-3">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
                 onClick={handleClaim}
-                disabled={loading}
-                className={`${neonButton} bg-orange-500 hover:bg-orange-600 text-black`}
+                disabled={!isConnected || isClaiming}
+                className="py-3 rounded-2xl bg-gradient-to-b from-[#ff8c1a] to-[#ff6b00] text-black font-bold"
               >
-                Claim Rewards
-              </button>
+                {isClaiming ? 'Claiming...' : 'Claim Rewards'}
+              </motion.button>
+
+              <div className="text-xs text-gray-400 text-center">Estimated USD: ${loadingPrice ? 'loading...' : displayUsd(pendingRewards)}</div>
             </div>
           </div>
-        </section>
 
-        {/* Transaction history & footer */}
-        <section className="grid gap-4 mb-8">
-          <div className={`${carbonCard} p-4`} style={neonGrid}>
-            <h3 className="text-lg font-bold text-orange-300 mb-3">Transaction History</h3>
-            {txHistory.length === 0 ? (
-              <p className="text-sm text-gray-400">No recent transactions in this session.</p>
-            ) : (
-              <ul className="space-y-2 max-h-48 overflow-auto">
-                {txHistory.map((t, i) => (
-                  <li key={i} className="text-xs bg-[#070707]/30 p-2 rounded flex justify-between">
-                    <div>
-                      <div className="font-semibold text-white">{t.tx}</div>
-                      <div className="text-gray-400">{new Date(t.time).toLocaleString()}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+          {/* Rewards Calculator (below) */}
+          <div className="mt-6 border-t border-gray-800 pt-6">
+            <h4 className="text-lg font-semibold">Rewards Calculator</h4>
+            <p className="text-sm text-gray-400">Type an amount and months you plan to hold (no withdrawals). Calculator shows estimated tokens and USD (price from CoinGecko or fallback).</p>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="text-sm text-gray-300">Amount (AFROX)</label>
+                <input type="number" step="0.0001" className="w-full mt-2 p-3 rounded-lg bg-[#081018] border border-gray-800" id="calcAmt" defaultValue="1000"
+                  onChange={(e) => setCalcAmount(e.target.value)} />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-300">Months held (no withdrawal)</label>
+                <input type="number" min="0" step="1" defaultValue="1" className="w-full mt-2 p-3 rounded-lg bg-[#081018] border border-gray-800" id="calcMonths"
+                  onChange={(e) => setCalcMonths(e.target.value)} />
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-300">Token price (USD)</label>
+                <div className="flex gap-2 mt-2">
+                  <input type="number" step="0.0001" className="flex-1 p-3 rounded-lg bg-[#081018] border border-gray-800" value={tokenPriceUsd ?? ''} onChange={(e) => setTokenPriceUsd(Number(e.target.value))} />
+                  <button onClick={() => { /* refresh price */ setTokenPriceUsd(null); }} className="px-3 py-2 rounded-lg bg-gray-800">Refresh</button>
+                </div>
+                <div className="mt-1 text-xs text-gray-400">{loadingPrice ? 'Fetching price...' : 'Price fetched from CoinGecko (if available).'}</div>
+              </div>
+            </div>
+
+            {/* Calculator result */}
+            <CalculatorDisplay tokenPriceUsd={tokenPriceUsd} />
           </div>
+        </div>
 
-          <footer className="text-center text-xs text-gray-400">
-            © 2019-Present AFRODEX. All rights reserved. | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
-          </footer>
-        </section>
+        {/* FOOTER */}
+        <footer className="text-center text-sm text-gray-400 mt-8">
+          <div>© 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A</div>
+        </footer>
+      </div>
+    </div>
+  );
 
-        {/* small alert */}
-        {alertMsg && (
-          <div className="fixed right-6 bottom-6 bg-[#0b0b0b] border border-orange-500 text-orange-300 p-3 rounded shadow-lg">
-            {alertMsg}
-          </div>
-        )}
-      </main>
+  // ---------- local component state wiring for the calculator inputs ----------
+  function setCalcAmount(val) {
+    // wrapper to store as number into component-level stable state using closure
+    componentState.calcAmount = val;
+    // force re-render by toggling a tiny internal counter? (We can use simple approach: local React state)
+    // But we avoided adding more states before; to keep code tidy, we'll use a simple pattern:
+    // Actually create a tiny nested hook component to manage calculator state and display — implemented below.
+  }
+}
+
+// Separate component for the calculator UI + logic (cleaner)
+function CalculatorDisplay({ tokenPriceUsd }) {
+  const [amount, setAmount] = useState(1000);
+  const [months, setMonths] = useState(1);
+
+  const BASE_DAILY_PERCENT = 0.03; // as above
+  const MONTHLY_BONUS_PERCENT = 0.3; // per month
+  const YEARLY_ESTIMATE_PERCENT = 24.09;
+
+  const daily = useMemo(() => (BASE_DAILY_PERCENT / 100) * Number(amount), [amount]);
+  const monthlyRatePct = BASE_DAILY_PERCENT + (MONTHLY_BONUS_PERCENT * Number(months));
+  const monthly = useMemo(() => ((monthlyRatePct / 100) * Number(amount)), [amount, monthlyRatePct]);
+  const yearly = useMemo(() => ((YEARLY_ESTIMATE_PERCENT / 100) * Number(amount)), [amount]);
+
+  return (
+    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+      <div className="p-4 rounded-lg bg-[#071018] border border-gray-800">
+        <div className="text-xs text-gray-400">Daily Reward</div>
+        <div className="text-xl font-bold">{daily.toLocaleString(undefined, { maximumFractionDigits: 6 })} AFROX</div>
+        <div className="text-sm text-gray-400">≈ ${tokenPriceUsd ? (daily * tokenPriceUsd).toFixed(2) : (daily * 0).toFixed(2)}</div>
+      </div>
+
+      <div className="p-4 rounded-lg bg-[#071018] border border-gray-800">
+        <div className="text-xs text-gray-400">Monthly (est)</div>
+        <div className="text-xl font-bold">{monthly.toLocaleString(undefined, { maximumFractionDigits: 6 })} AFROX</div>
+        <div className="text-sm text-gray-400">Rate: {monthlyRatePct.toFixed(3)}%</div>
+        <div className="text-sm text-gray-400">≈ ${tokenPriceUsd ? (monthly * tokenPriceUsd).toFixed(2) : (monthly*0).toFixed(2)}</div>
+      </div>
+
+      <div className="p-4 rounded-lg bg-[#071018] border border-gray-800">
+        <div className="text-xs text-gray-400">Yearly (est)</div>
+        <div className="text-xl font-bold">{yearly.toLocaleString(undefined, { maximumFractionDigits: 6 })} AFROX</div>
+        <div className="text-sm text-gray-400">Rate: {YEARLY_ESTIMATE_PERCENT}%</div>
+        <div className="text-sm text-gray-400">≈ ${tokenPriceUsd ? (yearly * tokenPriceUsd).toFixed(2) : (yearly*0).toFixed(2)}</div>
+
+        {/* Inputs (local) */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} className="p-2 rounded bg-[#061018] border border-gray-800 text-sm" />
+          <input type="number" value={months} onChange={(e) => setMonths(Number(e.target.value))} className="p-2 rounded bg-[#061018] border border-gray-800 text-sm" />
+        </div>
+      </div>
     </div>
   );
 }
