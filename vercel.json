@@ -4,12 +4,12 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install --omit=optional",
   "outputDirectory": ".next",
-  "env": {
-    "NODE_ENV": "production"
-  },
   "functions": {
     "api/**": {
       "runtime": "nodejs20.x"
     }
+  },
+  "env": {
+    "NODE_ENV": "production"
   }
 }
