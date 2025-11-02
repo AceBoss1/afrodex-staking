@@ -14,8 +14,16 @@
     "NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS": "0x08130635368AA28b217a4dfb68E1bF8dC525621C",
     "NEXT_PUBLIC_CHAIN_ID": "1"
   },
+  "buildCommand": "npm install --omit=optional && npm run build",
   "installCommand": "npm install --omit=optional",
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "framework": "nextjs"
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "build": {
+    "env": {
+      "NEXT_SKIP_SWCRC_CHECK": "1",
+      "NEXT_FORCE_SWCRC": "1"
+    }
+  }
 }
+
