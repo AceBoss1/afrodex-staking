@@ -1,18 +1,15 @@
 {
-  "buildCommand": "npm ci --omit=optional && npm run build",
-  "installCommand": "npm ci --omit=optional",
+  "version": 2,
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --omit=optional",
+  "outputDirectory": ".next",
   "env": {
     "NODE_ENV": "production"
   },
   "functions": {
-    "api/**/*.js": {
+    "api/**": {
       "runtime": "nodejs20.x"
-    }
-  },
-  "build": {
-    "env": {
-      "NEXT_FORCE_SWCRC": "1",
-      "NEXT_SKIP_SWCRC_CHECK": "1"
     }
   }
 }
