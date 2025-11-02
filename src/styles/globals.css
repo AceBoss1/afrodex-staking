@@ -1,22 +1,70 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Custom Global Styles */
-html,
-body {
-  padding: 0;
-  margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
-  background-color: #f9fafb;
-  color: #111827;
+/* ---- SHADOW-GLOW / FLAME HOVER for CARDS ---- */
+.card-shadow-glow {
+  background: #0f1720; /* dark base */
+  border-radius: 1rem;
+  border: 1px solid rgba(255,140,40,0.06);
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  will-change: transform;
+  overflow: hidden;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+/* subtle lift + orange glow on hover */
+.card-shadow-glow:hover {
+  transform: translateY(-6px);
+  border-color: rgba(255,140,40,0.30);
+  box-shadow:
+    0 6px 30px -6px rgba(255,140,40,0.18),
+    0 2px 8px -2px rgba(0,0,0,0.6);
 }
 
-* {
-  box-sizing: border-box;
+/* animated flame outline on hover (flicker) */
+.card-shadow-glow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  box-shadow: 0 0 40px 12px rgba(255,140,40,0.04) inset;
+  mix-blend-mode: screen;
 }
+
+.card-shadow-glow:hover::after {
+  opacity: 1;
+  animation: flicker 1.8s infinite;
+}
+
+/* flicker keyframes */
+@keyframes flicker {
+  0% { box-shadow: 0 0 28px 8px rgba(255,140,40,0.06) inset; transform: translateY(0) }
+  25% { box-shadow: 0 0 48px 14px rgba(255,140,40,0.14) inset; transform: translateY(-1px) }
+  50% { box-shadow: 0 0 36px 10px rgba(255,140,40,0.10) inset; transform: translateY(0) }
+  75% { box-shadow: 0 0 60px 18px rgba(255,140,40,0.18) inset; transform: translateY(-2px) }
+  100% { box-shadow: 0 0 28px 8px rgba(255,140,40,0.06) inset; transform: translateY(0) }
+}
+
+/* pulse-flame (you already have this; ensure it's present) */
+@keyframes flamePulse {
+  0% { filter: drop-shadow(0 0 4px rgba(249,115,22,0.3)); }
+  50% { filter: drop-shadow(0 0 18px rgba(249,115,22,0.9)); }
+  100% { filter: drop-shadow(0 0 4px rgba(249,115,22,0.3)); }
+}
+.pulse-flame { animation: flamePulse 2.2s infinite ease-in-out; }
+
+/* Tier badges */
+.tier-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.4px;
+}
+.tier-bronze { background: linear-gradient(90deg,#4b2b00,#6b3e0a); color: #FFD9B3; box-shadow: 0 2px 8px rgba(255,140,40,0.08); }
+.tier-silver { background: linear-gradient(90deg,#33383f,#5a6069); color: #EEF2FF; box-shadow: 0 2px 10px rgba(255,255,255,0.02); }
+.tier-gold { background: linear-gradient(90deg,#6b4a05,#ffb84d); color: #111827; box-shadow: 0 4px 18px rgba(255,170,50,0.12); }
+.tier-whale { background: linear-gradient(90deg,#2b0140,#7c00ff); color: #fff6ff; box-shadow: 0 4px 30px rgba(123,0,255,0.16); }
+
+/* small helpers */
+.stat-value { font-weight: 800; font-size: 1.75rem; letter-spacing: -0.02em; }
+.mono-small { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; font-size: 0.9rem; }
