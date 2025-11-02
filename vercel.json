@@ -4,7 +4,6 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install --omit=optional",
   "outputDirectory": ".next",
-  "runtime": "nodejs20.x",
   "env": {
     "NODE_ENV": "production"
   }
