@@ -26,5 +26,8 @@
   "eslint-config-next": "15.5.6"
   }
 }
+"overrides": {
+  "lightningcss": "1.25.1"
+}
 
 
