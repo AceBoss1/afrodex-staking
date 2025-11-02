@@ -553,7 +553,7 @@ export default function AfrodexStaking() {
           </div>
 
           <footer className="text-center text-xs text-gray-400">
-            © 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
+            © 2019-Present AFRODEX. All rights reserved. | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
           </footer>
         </section>
 
