@@ -1,0 +1,19 @@
+name: Clean Windows SWC
+on: [workflow_dispatch]
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Remove Windows-specific binaries and reinstall Linux-compatible ones
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --platform=linux --arch=x64
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add package-lock.json
+          git commit -m "Fix: rebuild dependencies for Linux/Vercel"
+          git push
