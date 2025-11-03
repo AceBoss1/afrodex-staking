@@ -1,49 +1,35 @@
 export const STAKING_ABI = [
   {
-    "inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],
-    "name":"stake",
-    "outputs":[{"internalType":"bool","name":"","type":"bool"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
+    inputs: [{ internalType: 'address', name: '_token', type: 'address' }],
+    name: 'depositToken',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],
-    "name":"unstake",
-    "outputs":[{"internalType":"bool","name":"","type":"bool"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
+    inputs: [{ internalType: 'uint256', name: '_amount', type: 'uint256' }],
+    name: 'stake',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
   {
-    "inputs":[{"internalType":"address","name":"account","type":"address"}],
-    "name":"viewStakeInfoOf",
-    "outputs":[
-      {"internalType":"uint256","name":"stakeBalance","type":"uint256"},
-      {"internalType":"uint256","name":"rewardValue","type":"uint256"},
-      {"internalType":"uint256","name":"lastUnstakeTimestamp","type":"uint256"},
-      {"internalType":"uint256","name":"lastRewardTimestamp","type":"uint256"}
+    inputs: [{ internalType: 'uint256', name: '_amount', type: 'uint256' }],
+    name: 'unstake',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '_user', type: 'address' }],
+    name: 'viewStakeInfoOf',
+    outputs: [
+      { internalType: 'uint256', name: 'stakeBalance', type: 'uint256' },
+      { internalType: 'uint256', name: 'rewardValue', type: 'uint256' },
+      { internalType: 'uint256', name: 'lastUnstakeTimestamp', type: 'uint256' },
+      { internalType: 'uint256', name: 'lastRewardTimestamp', type: 'uint256' },
     ],
-    "stateMutability":"view",
-    "type":"function"
+    stateMutability: 'view',
+    type: 'function',
   },
-  {
-    "inputs":[{"internalType":"uint256","name":"_rewardRate","type":"uint256"},{"internalType":"uint256","name":"_bonusRate","type":"uint256"}],
-    "name":"setRates",
-    "outputs":[{"internalType":"bool","name":"","type":"bool"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
-  },
-  {
-    "inputs":[{"internalType":"uint256","name":"_minStakeValue","type":"uint256"}],
-    "name":"setMinStakeValue",
-    "outputs":[{"internalType":"bool","name":"","type":"bool"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
-  },
-  {
-    "inputs":[{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],
-    "name":"transfer",
-    "outputs":[{"internalType":"bool","name":"","type":"bool"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
-  }
 ];
