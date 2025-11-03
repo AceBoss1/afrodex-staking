@@ -102,7 +102,7 @@ export default function AfrodexStaking() {
           setTokenPriceUsd(Number(json[key].usd));
         } else {
           // fallback static price if Coingecko doesn't know the token
-          setTokenPriceUsd(0.02);
+ setTokenPriceUsd(0.000001); // fallback static price until AfroX is indexed
         }
       } catch (err) {
         console.warn('Price fetch failed, using fallback', err);
