@@ -11,8 +11,8 @@ import {
   useContractWrite
 } from 'wagmi';
 
-import { STAKING_ABI } from '@/lib/StakingABI';
-import { AFROX_TOKEN_ABI } from '@/lib/AfroXTokenABI';
+import stakingABI from '../lib/StakingABI';
+import afroXTokenABI from '../lib/AfroXTokenABI';
 
 const TOKEN_ADDR = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS;
 const STAKING_ADDR = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS;
