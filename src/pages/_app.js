@@ -11,7 +11,7 @@ const config = getDefaultConfig({
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
   chains: [mainnet],
   transports: {
-    [mainnet.id]: `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_KEY}`,
+    [mainnet.id]: `https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
   },
   ssr: true,
 });
