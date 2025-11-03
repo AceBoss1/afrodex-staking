@@ -377,7 +377,7 @@ export default function AfrodexStaking() {
       <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">AfroX Staking Dashboard</h1>
-          <p className="text-sm text-orange-300/80">Stake AfroX and earn rewards</p>
+         <p className="text-gray-400">Stake AfroX and mint rewards</p>
         </div>
         <div className="flex items-center gap-4">
           <ConnectButton />
