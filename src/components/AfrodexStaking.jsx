@@ -355,6 +355,13 @@ export default function AfrodexStaking() {
       setIsClaiming(false);
     }
   }
+const tierBadges = {
+  Starter: { icon: "/badges/starter.png", label: "Starter" },
+  Bronze: { icon: "/badges/bronze.png", label: "Bronze" },
+  Silver: { icon: "/badges/silver.png", label: "Silver" },
+  Gold: { icon: "/badges/gold.png", label: "Gold" },
+  Whale: { icon: "/badges/whale.png", label: "Whale" },
+};
 
   // Rewards calculator
   const estimatedRewards = () => {
@@ -365,6 +372,20 @@ export default function AfrodexStaking() {
     const usd = reward * PRICE_USD_STATIC;
     return { reward, usd };
   };
+  // APR Values
+const BASE_DAILY = 0.0003; // 0.03%
+const MONTHLY_BONUS = 0.00003; // +0.003% (applies only after 30 days)
+
+// daysStaked should be retrieved from contract later — for now we assume UI toggle:
+const qualifiesForBonus = daysStaked >= 30;
+
+const dailyRate = qualifiesForBonus ? (BASE_DAILY + MONTHLY_BONUS) : BASE_DAILY;
+const yearlyRate = dailyRate * 365;
+
+const dailyReward = stakedBalance * dailyRate;
+const monthlyReward = stakedBalance * dailyRate * 30;
+const yearlyReward = stakedBalance * yearlyRate;
+
 
   const { reward: estReward, usd: estUsd } = estimatedRewards();
 
@@ -373,15 +394,31 @@ export default function AfrodexStaking() {
   const glow = { boxShadow: '0 0 18px rgba(255,140,0,0.24)' };
 
   return (
-    <div className="min-h-screen w-full bg-black text-white antialiased">
-      <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">AfroX Staking Dashboard</h1>
-         <p className="text-gray-400">Stake AfroX and mint rewards</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <ConnectButton />
-        </div>
+<div className="bg-zinc-900 border border-orange-400/30 rounded-xl p-4 mt-6">
+  <h3 className="text-lg font-semibold text-orange-300">Rewards Calculator</h3>
+
+  <div className="grid grid-cols-3 text-center mt-4 gap-4">
+    <div>
+      <p className="text-sm text-gray-400">Daily</p>
+      <p className="text-lg font-bold">{dailyReward.toFixed(4)} AFROX</p>
+    </div>
+    <div>
+      <p className="text-sm text-gray-400">Monthly</p>
+      <p className="text-lg font-bold">{monthlyReward.toFixed(4)} AFROX</p>
+    </div>
+    <div>
+      <p className="text-sm text-gray-400">Yearly</p>
+      <p className="text-lg font-bold">{yearlyReward.toFixed(4)} AFROX</p>
+    </div>
+  </div>
+
+  {qualifiesForBonus && (
+    <p className="text-xs text-green-400 mt-2">
+      ✅ Monthly bonus activated (extra +0.003% daily)
+    </p>
+  )}
+</div>
+
       </header>
 
       <main className="max-w-6xl mx-auto px-6 pb-12">
@@ -414,6 +451,10 @@ export default function AfrodexStaking() {
               </div>
               <div className="text-xs text-gray-400">{address ? shortAddr(address) : 'Not connected'}</div>
             </div>
+              <div className="flex items-center gap-3">
+  <img src={tierBadges[currentTier].icon} className="h-6 w-auto" />
+  <span>{tierBadges[currentTier].label}</span>
+</div>
             <div className="mt-3 text-xs text-gray-400">Tier thresholds: 10m, 100m, 1b, 10b</div>
           </motion.div>
         </section>
@@ -541,6 +582,17 @@ export default function AfrodexStaking() {
             <div>Wallet: <span className="text-white font-mono">{address ? shortAddr(address) : '—'}</span></div>
             <div>Token decimals: <span className="text-orange-300">{tokenDecimals}</span></div>
           </div>
+          <p className="text-xs text-gray-400 mt-3">
+  Claim Note & Policy: Claiming normally occurs when unstaking. To claim without unstaking fully, unstake a small amount (e.g., 1 AFROX).
+  <br />
+  <span
+    className="text-orange-400 cursor-pointer hover:underline"
+    onClick={() => setShowDisclaimer(true)}
+  >
+    READ FULL &gt;&gt;
+  </span>
+</p>
+
         </section>
       </main>
 
