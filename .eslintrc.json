@@ -1,9 +1,9 @@
 {
   "extends": ["next/core-web-vitals"],
-  "rules": {
-    "react-hooks/exhaustive-deps": "off"
+  "settings": {
+    "next": {
+      "rootDir": ["src/"]
+    }
   },
-  "parserOptions": {
-    "requireConfigFile": false
-  }
+  "rules": {}
 }
