@@ -14,10 +14,10 @@ export default function ConnectHeader() {
           <ConnectButton label="Connect Wallet" />
         </div>
 
-<h1 className="text-orange-400 text-3xl font-bold flex items-center gap-3">
-  <img src="/afrodex_logoT.png" className="h-8 w-auto" />
+<h1 className="text-orange-400 text-3xl font-bold flex items-center gap-4">
+  <img src="/afrodex_logoT.png" className="h-9 w-auto opacity-90" />
   AfroX Staking and Minting Engine
-  <img src="/afrodex_logoA.png" className="h-8 w-auto" />
+  <img src="/afrodex_logoA.png" className="h-9 w-auto opacity-90" />
 </h1>
       </div>
     </header>
