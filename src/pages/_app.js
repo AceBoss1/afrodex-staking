@@ -1,4 +1,4 @@
-import '@/styles/globals.css'; // <-- ensure this file exists
+import '../styles/globals.css'; // <-- ensure this file exists
 import '@rainbow-me/rainbowkit/styles.css';
 
 import { WagmiProvider, http, createConfig } from 'wagmi';
