@@ -1,39 +1,43 @@
 export const AFROX_TOKEN_ABI = [
   {
-    "inputs":[{"internalType":"address","name":"account","type":"address"}],
-    "name":"balanceOf",
-    "outputs":[{"internalType":"uint256","name":"","type":"uint256"}],
-    "stateMutability":"view",
-    "type":"function"
+    constant: true,
+    inputs: [{ name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ name: '', type: 'uint256' }],
+    type: 'function',
   },
   {
-    "inputs":[
-      {"internalType":"address","name":"spender","type":"address"},
-      {"internalType":"uint256","name":"amount","type":"uint256"}
+    constant: true,
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
     ],
-    "name":"approve",
-    "outputs":[{"internalType":"bool","name":"","type":"bool"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
+    name: 'allowance',
+    outputs: [{ name: '', type: 'uint256' }],
+    type: 'function',
   },
   {
-    "inputs":[
-      {"internalType":"address","name":"owner","type":"address"},
-      {"internalType":"address","name":"spender","type":"address"}
+    constant: false,
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
     ],
-    "name":"allowance",
-    "outputs":[{"internalType":"uint256","name":"","type":"uint256"}],
-    "stateMutability":"view",
-    "type":"function"
+    name: 'approve',
+    outputs: [{ name: '', type: 'bool' }],
+    type: 'function',
   },
   {
-    "inputs":[
-      {"internalType":"address","name":"recipient","type":"address"},
-      {"internalType":"uint256","name":"amount","type":"uint256"}
-    ],
-    "name":"transfer",
-    "outputs":[{"internalType":"bool","name":"","type":"bool"}],
-    "stateMutability":"nonpayable",
-    "type":"function"
-  }
+    constant: true,
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ name: '', type: 'uint8' }],
+    type: 'function',
+  },
+  {
+    constant: true,
+    inputs: [],
+    name: 'symbol',
+    outputs: [{ name: '', type: 'string' }],
+    type: 'function',
+  },
 ];
