@@ -1,5 +1,5 @@
 // src/pages/_app.js
-import '@/styles/globals.css';
+import '../styles/globals.css';
 import '@rainbow-me/rainbowkit/styles.css';
 import { getDefaultConfig, RainbowKitProvider } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
