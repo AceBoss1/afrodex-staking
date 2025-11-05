@@ -5,7 +5,7 @@ import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
 
 // Adjust path if you named the ABI files differently; user said abis.js earlier
-import { STAKING_ABI, AFROX_TOKEN_ABI } from '@/lib/abis'; // <-- ensure this file exports both ABIs
+import { STAKING_ABI, AFROX_TOKEN_ABI } from '../lib/abis'; // <-- ensure this file exports both ABIs
 
 // Config / constants
 const STAKING_ADDR = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS;
