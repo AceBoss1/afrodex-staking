@@ -393,27 +393,27 @@ export default function AfrodexStaking() {
             whileHover={{ ...glow }}
           >
             <div className="text-sm text-gray-300">Your Stake</div>
-            <div className="text-2xl font-bold flex items-center gap-2">
-  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 opacity-90" />
-  {displayAmount(stakedBalance)} AfroX
+<div className="text-2xl font-bold flex items-center gap-2">
+  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
+  {stakedBalance} AfroX
 </div>
 
           </motion.div>
 
           <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ ...glow }}>
             <div className="text-sm text-gray-300">Rewards</div>
-            <div className="text-2xl font-bold flex items-center gap-2">
-  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 opacity-90" />
-  {displayAmount(rewards)} AfroX
+<div className="text-2xl font-bold flex items-center gap-2">
+  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
+  {rewards} AfroX
 </div>
 
           </motion.div>
 
           <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ ...glow }}>
             <div className="text-sm text-gray-300">Wallet Balance</div>
-      <div className="text-lg flex items-center gap-2">
-  <img src="/afrodex_token.png" alt="AfroX" className="h-5 w-5 opacity-90" />
-  {displayAmount(walletBalance)} AfroX
+<div className="text-2xl font-bold flex items-center gap-2">
+  <img src="/afrodex_token.png" alt="AfroX" className="h-5 w-5 rounded-full opacity-90" />
+  {walletBalance} AfroX
 </div>
 
           </motion.div>
