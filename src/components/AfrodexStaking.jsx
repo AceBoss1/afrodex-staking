@@ -393,17 +393,29 @@ export default function AfrodexStaking() {
             whileHover={{ ...glow }}
           >
             <div className="text-sm text-gray-300">Your Stake</div>
-            <div className="text-2xl font-bold">{stakedBalance} AfroX</div>
+            <div className="text-2xl font-bold flex items-center gap-2">
+  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 opacity-90" />
+  {displayAmount(stakedBalance)} AfroX
+</div>
+
           </motion.div>
 
           <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ ...glow }}>
             <div className="text-sm text-gray-300">Rewards</div>
-            <div className="text-2xl font-bold">{rewards} AfroX</div>
+            <div className="text-2xl font-bold flex items-center gap-2">
+  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 opacity-90" />
+  {displayAmount(rewards)} AfroX
+</div>
+
           </motion.div>
 
           <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ ...glow }}>
             <div className="text-sm text-gray-300">Wallet Balance</div>
-            <div className="text-2xl font-bold">{walletBalance} AfroX</div>
+      <div className="text-lg flex items-center gap-2">
+  <img src="/afrodex_token.png" alt="AfroX" className="h-5 w-5 opacity-90" />
+  {displayAmount(walletBalance)} AfroX
+</div>
+
           </motion.div>
 
           <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10 flex flex-col justify-between" whileHover={{ ...glow }}>
