@@ -516,35 +516,64 @@ export default function AfrodexStaking() {
         </section>
 
         {/* Claim full width & Rewards center */}
-        <section className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10 mb-6">
-          <h3 className="text-lg font-bold mb-2">Rewards Center</h3>
-          <div className="text-sm text-gray-400 mb-4">APR: <span className="text-orange-300 font-semibold">{aprPercent}%</span></div>
+       <section className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10 mb-6">
+  <h3 className="text-lg font-bold mb-4">Rewards Center</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <div className="mb-3 text-sm text-gray-300">Estimated rewards calculator</div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <input type="number" step="0.0001" value={aprPercent} onChange={(e) => setAprPercent(Number(e.target.value))}
-                       className="p-2 rounded bg-gray-800 text-white" />
-                <input type="number" step="1" value={estDays} onChange={(e) => setEstDays(Number(e.target.value))}
-                       className="p-2 rounded bg-gray-800 text-white" />
-                <input type="number" step="0.0001" value={stakedBalance} onChange={(e) => setStakedBalance(e.target.value)}
-                       className="p-2 rounded bg-gray-800 text-white" />
-              </div>
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    {/* Calculator */}
+    <div className="md:col-span-2">
+      <div className="text-sm text-gray-300 mb-3">Estimated rewards calculator</div>
 
-              <div className="mt-4 text-gray-300">
-                Estimated rewards for {estDays} days: <span className="font-bold text-white">{Number(estReward).toFixed(6)} AfroX</span>
-                <div className="text-sm text-gray-400">~ ${Number(estUsd).toFixed(6)} (price: ${PRICE_USD_STATIC})</div>
-              </div>
-            </div>
+      {/* Days Input */}
+      <label className="block text-xs text-gray-400 mb-1">Days to Stake</label>
+      <input
+        type="number"
+        step="1"
+        value={estDays}
+        onChange={(e) => setEstDays(Number(e.target.value))}
+        className="w-full p-2 rounded bg-gray-800 text-white mb-3"
+      />
 
-            <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20 flex flex-col justify-center items-start">
-              <div className="text-xs text-gray-300 mb-1">APR (protocol)</div>
-              <div className="text-2xl font-bold text-orange-300">{aprPercent}%</div>
-              <div className="mt-2 text-xs text-gray-400">Live reward growth updates when user interacts</div>
-            </div>
-          </div>
-        </section>
+      {/* Stake Amount Input */}
+      <label className="block text-xs text-gray-400 mb-1">Amount to Stake (AfroX)</label>
+      <input
+        type="number"
+        step="0.0001"
+        value={stakedBalance}
+        onChange={(e) => setStakedBalance(e.target.value)}
+        className="w-full p-2 rounded bg-gray-800 text-white mb-4"
+      />
+
+      {/* Output */}
+      <div className="text-gray-300">
+        Estimated rewards for {estDays} days:
+        <span className="font-bold text-white"> {Number(estReward).toFixed(6)} AfroX</span>
+        <div className="text-sm text-gray-500">
+          ≈ ${Number(estUsd).toFixed(6)} (at ${PRICE_USD_STATIC} per AfroX)
+        </div>
+      </div>
+    </div>
+
+    {/* APR Card */}
+    <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20 flex flex-col justify-center items-start">
+      <div className="text-xs text-gray-400">APR (protocol)</div>
+      <div className="text-2xl font-bold text-orange-300">
+        24.09% <span className="text-sm text-gray-400">(if staked for 365 days)</span>
+      </div>
+
+      <div className="mt-3 text-xs text-gray-400 leading-relaxed">
+        Daily APR = <span className="text-orange-300 font-medium">0.03%</span><br />
+        Monthly Bonus = <span className="text-orange-300 font-medium">+0.003%</span> if staked ≥ 30 days<br />
+        Total yearly ≈ <span className="text-orange-300 font-medium">24.09%</span>
+      </div>
+
+      <div className="mt-3 text-xs text-gray-500">
+        *Rewards grow live when user interacts*
+      </div>
+    </div>
+  </div>
+</section>
+
 
         {/* tx / debug panel */}
         <section className="mb-6">
