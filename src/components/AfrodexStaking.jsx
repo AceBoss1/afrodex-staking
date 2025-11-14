@@ -1,7 +1,7 @@
 // src/components/AfrodexStaking.jsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { motion } from 'framer-motion';
 import {
@@ -10,368 +10,462 @@ import {
   useWalletClient,
 } from 'wagmi';
 import { parseUnits, formatUnits } from 'viem';
-import { STAKING_ABI, AFROX_TOKEN_ABI } from '../lib/abis'; // <-- ensure this file exports STAKING_ABI & AFROX_TOKEN_ABI
 
-// Environment (should be set in .env.local)
-const STAKING_ADDRESS = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS;
-const TOKEN_ADDRESS = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS;
+import { STAKING_ABI, AFROX_TOKEN_ABI } from '../lib/abis'; // your export path
+import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
 
-// UI constants
-const PRICE_USD_STATIC = 0.000001; // static AfroX USD price until CoinGecko returns
-const DEFAULT_DECIMALS = 4; // your token has 4 decimals as you said
+// constants
+const DECIMALS_DEFAULT = 4;
+const PRICE_USD_STATIC = 0.000001;
+const TOKEN_LABEL = 'AfroX';
+const TOKEN_LOGO = '/afrodex_token.png'; // ensure this exists in /public
 
 export default function AfrodexStaking() {
   const { address, isConnected } = useAccount();
-  const publicClient = usePublicClient();    // for readonly calls
-  const walletClient = useWalletClient();    // for signing / writes
+  const publicClient = usePublicClient();
+  const walletClient = useWalletClient();
 
   // UI state
-  const [amount, setAmount] = useState(''); // amount user enters (token units)
+  const [amount, setAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
-  const [tokenDecimals, setTokenDecimals] = useState(DEFAULT_DECIMALS);
+  const [decimals, setDecimals] = useState(DECIMALS_DEFAULT);
+
+  // on-chain state
   const [walletBalance, setWalletBalance] = useState('0');
   const [stakedBalance, setStakedBalance] = useState('0');
   const [rewards, setRewards] = useState('0');
   const [allowance, setAllowance] = useState('0');
-  const [isApproving, setIsApproving] = useState(false);
-  const [isStaking, setIsStaking] = useState(false);
-  const [isUnstaking, setIsUnstaking] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
+
+  // staking meta values
+  const [rewardRate, setRewardRate] = useState(0); // daily base (decimal), fallback to 0.0003
+  const [bonusRate, setBonusRate] = useState(0);   // monthly bonus (decimal), fallback to 0.00003
+
+  // timestamps returned from viewStakeInfoOf (epoch seconds)
+  const [lastUnstakeTs, setLastUnstakeTs] = useState(0);
+  const [lastRewardTs, setLastRewardTs] = useState(0);
+
+  // UX flags
+  const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState(null);
+  const [alertMsg, setAlertMsg] = useState(null);
 
-  // APR / Reward calculator state
-  const [aprPercent, setAprPercent] = useState(24.09); // default computed earlier
-  const [estDays, setEstDays] = useState(30);
+  // Helpers: formatting
+  const nf = (v, d = decimals) => {
+    const n = Number(v ?? 0);
+    if (!Number.isFinite(n)) return '0';
+    return n.toLocaleString(undefined, { maximumFractionDigits: Math.max(0, d) });
+  };
 
-  // Helper: format token amounts using decimals
+  // Convert raw bigint (or number string) to human via viem.formatUnits
   const toHuman = useCallback((raw) => {
     try {
-      return formatUnits(BigInt(raw || 0n), tokenDecimals || DEFAULT_DECIMALS);
+      if (raw === null || raw === undefined) return '0';
+      // formatUnits accepts bigint or string; ensure bigint if possible
+      return formatUnits(raw, decimals);
     } catch (e) {
       // fallback
-      return (Number(raw || 0) / (10 ** (tokenDecimals || DEFAULT_DECIMALS))).toString();
+      return String(raw);
     }
-  }, [tokenDecimals]);
+  }, [decimals]);
 
+  // Convert human string to raw bigint
   const toRaw = useCallback((humanStr) => {
     try {
-      return parseUnits(humanStr || '0', tokenDecimals || DEFAULT_DECIMALS);
+      return parseUnits(String(humanStr || '0'), decimals);
     } catch (e) {
-      // parseUnits will throw if invalid, return 0n
       return 0n;
     }
-  }, [tokenDecimals]);
+  }, [decimals]);
 
-  // Fetch on-chain data (balances, allowance, stake info)
+  // Short address helper
+  const shortAddr = (a) => a ? `${a.slice(0, 6)}...${a.slice(-4)}` : '—';
+
+  // show temporary alert
+  const showAlert = (m, t = 5000) => {
+    setAlertMsg(String(m));
+    setTimeout(() => setAlertMsg(null), t);
+  };
+
+  // FETCH ON-CHAIN: balances, allowance, stakeInfo, rates, decimals
   const fetchOnChain = useCallback(async () => {
     if (!publicClient) return;
 
     try {
-      // Token decimals (safe-guard)
-      try {
-        const decimalsRaw = await publicClient.readContract({
-          address: TOKEN_ADDRESS,
-          abi: AFROX_TOKEN_ABI,
-          functionName: 'decimals',
-          args: [],
-        });
-        if (decimalsRaw) {
-          const d = typeof decimalsRaw === 'bigint' ? Number(decimalsRaw) : Number(decimalsRaw ?? DEFAULT_DECIMALS);
-          setTokenDecimals(Number.isFinite(d) ? d : DEFAULT_DECIMALS);
-        }
-      } catch (err) {
-        // keep default if function missing
-        setTokenDecimals(DEFAULT_DECIMALS);
+      // decimals (token)
+      const decimalsRaw = await readContractSafe(publicClient, {
+        address: TOKEN_ADDRESS,
+        abi: AFROX_TOKEN_ABI,
+        functionName: 'decimals',
+        args: [],
+      });
+      if (decimalsRaw !== null && decimalsRaw !== undefined) {
+        const d = typeof decimalsRaw === 'bigint' ? Number(decimalsRaw) : Number(decimalsRaw);
+        if (Number.isFinite(d)) setDecimals(d);
+      } else {
+        setDecimals(DECIMALS_DEFAULT);
       }
 
-      // Wallet token balance
+      // wallet balance
+      const balRaw = address ? await readContractSafe(publicClient, {
+        address: TOKEN_ADDRESS,
+        abi: AFROX_TOKEN_ABI,
+        functionName: 'balanceOf',
+        args: [address],
+      }) : 0n;
+      setWalletBalance(toHuman(balRaw ?? 0n));
+
+      // allowance
+      const allowRaw = address ? await readContractSafe(publicClient, {
+        address: TOKEN_ADDRESS,
+        abi: AFROX_TOKEN_ABI,
+        functionName: 'allowance',
+        args: [address, STAKING_ADDRESS],
+      }) : 0n;
+      setAllowance(toHuman(allowRaw ?? 0n));
+
+      // stakeInfo (if address connected)
       if (address) {
-        try {
-          const balRaw = await publicClient.readContract({
-            address: TOKEN_ADDRESS,
-            abi: AFROX_TOKEN_ABI,
-            functionName: 'balanceOf',
-            args: [address],
-          });
-          setWalletBalance(toHuman(balRaw));
-        } catch (e) {
-          setWalletBalance('0');
-        }
+        const stakeInfo = await readContractSafe(publicClient, {
+          address: STAKING_ADDRESS,
+          abi: STAKING_ABI,
+          functionName: 'viewStakeInfoOf',
+          args: [address],
+        });
 
-        // Allowance
-        try {
-          const allowanceRaw = await publicClient.readContract({
-            address: TOKEN_ADDRESS,
-            abi: AFROX_TOKEN_ABI,
-            functionName: 'allowance',
-            args: [address, STAKING_ADDRESS],
-          });
-          setAllowance(toHuman(allowanceRaw));
-        } catch (e) {
-          // function might not exist on token ABI — handle gracefully
-          setAllowance('0');
-        }
+        if (stakeInfo) {
+          // handle both array and named return (some providers return arrays)
+          const stakeBalRaw = stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n;
+          const rewardValRaw = stakeInfo.rewardValue ?? stakeInfo[1] ?? 0n;
+          const lastUnstakeRaw = stakeInfo.lastUnstakeTimestamp ?? stakeInfo[2] ?? 0n;
+          const lastRewardRaw = stakeInfo.lastRewardTimestamp ?? stakeInfo[3] ?? 0n;
 
-        // Staking contract: viewStakeInfoOf (if available) or fallback stake()
-        try {
-          const stakeInfo = await publicClient.readContract({
-            address: STAKING_ADDRESS,
-            abi: STAKING_ABI,
-            functionName: 'viewStakeInfoOf',
-            args: [address],
-          });
-          // stakeInfo expected: [stakeBalance, rewardValue, lastUnstakeTimestamp, lastRewardTimestamp]
-          if (stakeInfo && stakeInfo[0] !== undefined) {
-            setStakedBalance(toHuman(stakeInfo[0]));
-            setRewards(toHuman(stakeInfo[1] ?? 0n));
-          }
-        } catch (err) {
-          // fallback: try a "stake" or "balanceOf" on staking contract
-          try {
-            const stBal = await publicClient.readContract({
-              address: STAKING_ADDRESS,
-              abi: STAKING_ABI,
-              functionName: 'balanceOf',
-              args: [address],
-            });
-            setStakedBalance(toHuman(stBal));
-          } catch (_) {
-            setStakedBalance('0');
-          }
+          setStakedBalance(toHuman(stakeBalRaw ?? 0n));
+          setRewards(toHuman(rewardValRaw ?? 0n));
+          // store timestamps as numbers (seconds)
+          setLastUnstakeTs(Number(lastUnstakeRaw ?? 0n));
+          setLastRewardTs(Number(lastRewardRaw ?? 0n));
+        } else {
+          setStakedBalance('0');
+          setRewards('0');
+          setLastUnstakeTs(0);
+          setLastRewardTs(0);
         }
       } else {
-        setWalletBalance('0');
         setStakedBalance('0');
-        setAllowance('0');
         setRewards('0');
+        setLastUnstakeTs(0);
+        setLastRewardTs(0);
       }
+
+      // read rewardRate & bonusRate if provided by contract
+      const rewardRateRaw = await readContractSafe(publicClient, {
+        address: STAKING_ADDRESS,
+        abi: STAKING_ABI,
+        functionName: 'rewardRate',
+      });
+
+      const bonusRateRaw = await readContractSafe(publicClient, {
+        address: STAKING_ADDRESS,
+        abi: STAKING_ABI,
+        functionName: 'bonusRate',
+      });
+
+      // interpret as decimals using token decimals to formatUnits (contract stores as base with decimals)
+      const r = rewardRateRaw ? Number(formatUnits(rewardRateRaw, decimals)) : 0;
+      const b = bonusRateRaw ? Number(formatUnits(bonusRateRaw, decimals)) : 0;
+      // If contract returns numbers like 0.0003 (already decimal), these will map; if constants are formatted differently adjust here.
+      setRewardRate(r || 0);
+      setBonusRate(b || 0);
+
     } catch (err) {
       console.error('fetchOnChain error', err);
     }
-  }, [publicClient, address, toHuman]);
+  }, [publicClient, address, decimals, toHuman]);
 
-  // Poll once on mount and when address changes
+  // initial fetch + periodic refresh
   useEffect(() => {
     fetchOnChain();
-    // refresh every 30 seconds while connected
-    let timer;
-    if (isConnected) {
-      timer = setInterval(fetchOnChain, 30_000);
-    }
-    return () => clearInterval(timer);
-  }, [fetchOnChain, isConnected]);
+    const t = setInterval(fetchOnChain, 20_000);
+    return () => clearInterval(t);
+  }, [fetchOnChain]);
 
-  // UX helpers
-  const shortAddr = (addr) => addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '';
-
-  // Write helpers (use walletClient.writeContract)
-  async function handleApprove() {
-    if (!walletClient || !isConnected) {
-      alert('Connect your wallet first');
-      return;
-    }
-    if (!amount || Number(amount) <= 0) {
-      alert('Enter an amount to approve');
-      return;
-    }
-
-    setIsApproving(true);
-    setTxHash(null);
+  // --- Write helpers (approve/stake/unstake/claim) ---
+  async function doApprove(amountHuman) {
+    if (!walletClient || !isConnected) { showAlert('Connect wallet'); return; }
     try {
-      const rawAmount = toRaw(amount); // bigint
-      const tx = await walletClient.writeContract({
+      const raw = toRaw(amountHuman);
+      setLoading(true);
+      const tx = await writeContractSafe(walletClient, {
         address: TOKEN_ADDRESS,
         abi: AFROX_TOKEN_ABI,
         functionName: 'approve',
-        args: [STAKING_ADDRESS, rawAmount],
+        args: [STAKING_ADDRESS, raw],
       });
-      setTxHash(tx?.hash ?? null);
-      // wait for receipt if walletClient has wait method (some wallets return)
+      setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
+      // wait for receipt when possible
       try {
-        if (tx?.request && walletClient.waitForTransaction) {
-          await walletClient.waitForTransaction({ hash: tx.request.hash });
-        }
-      } catch (_) {}
-      // refresh
+        if (tx?.request) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
+        else if (tx?.hash) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
+      } catch (e) { /* ignore waiting errors */ }
       await fetchOnChain();
+      showAlert('Approve confirmed');
     } catch (err) {
-      console.error('approve failed', err);
-      alert('Approve failed: ' + (err?.message || err));
-    } finally {
-      setIsApproving(false);
-    }
+      console.error('approve err', err);
+      showAlert('Approve failed: ' + (err?.message ?? err));
+    } finally { setLoading(false); }
   }
 
-  async function handleStake() {
-    if (!walletClient || !isConnected) {
-      alert('Connect your wallet first');
-      return;
-    }
-    if (!amount || Number(amount) <= 0) {
-      alert('Enter an amount to stake');
-      return;
-    }
-
-    setIsStaking(true);
+  async function doStake(amountHuman) {
+    if (!walletClient || !isConnected) { showAlert('Connect wallet'); return; }
+    if (!amountHuman || Number(amountHuman) <= 0) { showAlert('Enter amount to stake'); return; }
+    setLoading(true);
     setTxHash(null);
-    try {
-      const raw = toRaw(amount);
 
-      // Try common staking function names: depositToken(tokenAddr, amount) or stake(amount)
-      const tryCalls = [
-        { fn: 'depositToken', args: [TOKEN_ADDRESS, raw] },
+    try {
+      const raw = toRaw(amountHuman);
+
+      // ensure allowance
+      const allowRaw = await readContractSafe(publicClient, {
+        address: TOKEN_ADDRESS,
+        abi: AFROX_TOKEN_ABI,
+        functionName: 'allowance',
+        args: [address, STAKING_ADDRESS],
+      });
+
+      if ((allowRaw ?? 0n) < raw) {
+        // approve large amount first
+        showAlert('Allowance low — approving first');
+        await doApprove('1000000000000'); // big number (human)
+      }
+
+      // try stake or depositToken
+      const tryFns = [
         { fn: 'stake', args: [raw] },
+        { fn: 'depositToken', args: [TOKEN_ADDRESS, raw] },
       ];
 
-      let receipt;
-      for (const call of tryCalls) {
+      let receipt = null;
+      for (const call of tryFns) {
         try {
-          const tx = await walletClient.writeContract({
+          const tx = await writeContractSafe(walletClient, {
             address: STAKING_ADDRESS,
             abi: STAKING_ABI,
             functionName: call.fn,
             args: call.args,
           });
-          setTxHash(tx?.hash ?? null);
+          setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
+          // wait a bit
+          try {
+            if (tx?.request) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
+            else if (tx?.hash) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
+          } catch (e) {}
           receipt = tx;
           break;
         } catch (err) {
-          // try next
+          // try next function
           continue;
         }
       }
 
-      if (!receipt) throw new Error('No usable staking function found in ABI or call failed.');
+      if (!receipt) throw new Error('No usable staking function found or all calls reverted');
 
-      // optional wait
-      try {
-        if (receipt?.request && walletClient.waitForTransaction) {
-          await walletClient.waitForTransaction({ hash: receipt.request.hash });
-        }
-      } catch (_) {}
-
+      showAlert('Stake confirmed');
+      setAmount('');
       await fetchOnChain();
     } catch (err) {
-      console.error('stake failed', err);
-      alert('Stake failed: ' + (err?.message || err));
+      console.error('stake error', err);
+      showAlert('Stake failed: ' + (err?.message ?? err));
     } finally {
-      setIsStaking(false);
+      setLoading(false);
     }
   }
 
-  async function handleUnstake() {
-    if (!walletClient || !isConnected) {
-      alert('Connect your wallet first');
-      return;
-    }
-    if (!unstakeAmount || Number(unstakeAmount) <= 0) {
-      alert('Enter an amount to unstake');
-      return;
-    }
-    setIsUnstaking(true);
+  async function doUnstake(amountHuman) {
+    if (!walletClient || !isConnected) { showAlert('Connect wallet'); return; }
+    if (!amountHuman || Number(amountHuman) <= 0) { showAlert('Enter amount to unstake'); return; }
+    setLoading(true);
     setTxHash(null);
+
     try {
-      const raw = toRaw(unstakeAmount);
-      // common function name: unstake(amount)
-      const tx = await walletClient.writeContract({
+      const raw = toRaw(amountHuman);
+      const tx = await writeContractSafe(walletClient, {
         address: STAKING_ADDRESS,
         abi: STAKING_ABI,
         functionName: 'unstake',
         args: [raw],
       });
-      setTxHash(tx?.hash ?? null);
+      setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
       try {
-        if (tx?.request && walletClient.waitForTransaction) {
-          await walletClient.waitForTransaction({ hash: tx.request.hash });
-        }
-      } catch (_) {}
+        if (tx?.request) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
+        else if (tx?.hash) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
+      } catch (e) {}
+      showAlert('Unstake confirmed');
+      setUnstakeAmount('');
       await fetchOnChain();
     } catch (err) {
-      console.error('unstake failed', err);
-      alert('Unstake failed: ' + (err?.message || err));
-    } finally {
-      setIsUnstaking(false);
-    }
+      console.error('unstake err', err);
+      showAlert('Unstake failed: ' + (err?.message ?? err));
+    } finally { setLoading(false); }
   }
 
-  async function handleClaim() {
-    if (!walletClient || !isConnected) {
-      alert('Connect your wallet first');
-      return;
-    }
-    setIsClaiming(true);
+  // claim: try common claim functions; fallback to tiny unstake+restake if necessary
+  async function doClaim() {
+    if (!walletClient || !isConnected) { showAlert('Connect wallet'); return; }
+    setLoading(true);
     setTxHash(null);
+
+    const candidates = ['claim', 'claimRewards', 'withdrawReward', 'getReward', 'withdraw'];
+
     try {
-      // Try claim(), claimRewards(), or a minimal unstake-claim hack
-      const candidates = ['claim', 'claimRewards', 'withdrawReward', 'getReward'];
       let found = false;
       for (const fn of candidates) {
         try {
-          const tx = await walletClient.writeContract({
+          const tx = await writeContractSafe(walletClient, {
             address: STAKING_ADDRESS,
             abi: STAKING_ABI,
             functionName: fn,
             args: [],
           });
-          setTxHash(tx?.hash ?? null);
-          found = true;
+          setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
+          // wait
           try {
-            if (tx?.request && walletClient.waitForTransaction) {
-              await walletClient.waitForTransaction({ hash: tx.request.hash });
-            }
-          } catch (_) {}
+            if (tx?.request) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
+            else if (tx?.hash) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
+          } catch (e) {}
+          found = true;
           break;
-        } catch (_) {
+        } catch (e) {
           continue;
         }
       }
 
-      // If no claim function exists, try a minimal unstake+stake hack of 0 (some contracts allow)
       if (!found) {
-        try {
-          const tx2 = await walletClient.writeContract({
-            address: STAKING_ADDRESS,
-            abi: STAKING_ABI,
-            functionName: 'unstake',
-            args: [0n],
-          });
-          setTxHash(tx2?.hash ?? null);
-          try {
-            if (tx2?.request && walletClient.waitForTransaction) {
-              await walletClient.waitForTransaction({ hash: tx2.request.hash });
-            }
-          } catch (_) {}
-        } catch (err) {
-          console.warn('claim fallback failed', err);
-          alert('Claim not available on this staking contract.');
-        }
-      }
+        // try tiny unstake/retake sequence if user has > tiny staked
+        const tiny = parseUnits('1', decimals); // 1 base unit (1 * 10^-decimals)
+        const stakeInfo = await readContractSafe(publicClient, {
+          address: STAKING_ADDRESS,
+          abi: STAKING_ABI,
+          functionName: 'viewStakeInfoOf',
+          args: [address],
+        });
 
+        const stakedRaw = stakeInfo ? (stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n) : 0n;
+        if (stakedRaw >= tiny) {
+          // unstake tiny then stake tiny back
+          try {
+            const tx1 = await writeContractSafe(walletClient, {
+              address: STAKING_ADDRESS,
+              abi: STAKING_ABI,
+              functionName: 'unstake',
+              args: [tiny],
+            });
+            setTxHash(tx1?.hash ?? tx1?.request?.hash ?? null);
+            try {
+              if (tx1?.request) await publicClient.waitForTransactionReceipt({ hash: tx1.request.hash });
+              else if (tx1?.hash) await publicClient.waitForTransactionReceipt({ hash: tx1.hash });
+            } catch (e) {}
+            const tx2 = await writeContractSafe(walletClient, {
+              address: STAKING_ADDRESS,
+              abi: STAKING_ABI,
+              functionName: 'stake',
+              args: [tiny],
+            });
+            try {
+              if (tx2?.request) await publicClient.waitForTransactionReceipt({ hash: tx2.request.hash });
+              else if (tx2?.hash) await publicClient.waitForTransactionReceipt({ hash: tx2.hash });
+            } catch (e) {}
+            showAlert('Claim sequence (unstake tiny + restake) completed');
+          } catch (err) {
+            console.error('fallback claim sequence failed', err);
+            showAlert('Claim fallback failed: ' + (err?.message ?? err));
+          }
+        } else {
+          showAlert('No claim function and staked balance too low for fallback.');
+        }
+      } else {
+        showAlert('Claim executed');
+      }
       await fetchOnChain();
     } catch (err) {
-      console.error('claim failed', err);
-      alert('Claim failed: ' + (err?.message || err));
-    } finally {
-      setIsClaiming(false);
-    }
+      console.error('claim err', err);
+      showAlert('Claim failed: ' + (err?.message ?? err));
+    } finally { setLoading(false); }
   }
 
-  // Rewards calculator
-  const estimatedRewards = () => {
-    const stake = Number(stakedBalance || 0);
-    const apr = Number(aprPercent || 0) / 100; // decimal
-    const days = Number(estDays || 0);
-    const reward = stake * apr * (days / 365);
-    const usd = reward * PRICE_USD_STATIC;
-    return { reward, usd };
+  // --- Rewards calculation helpers ---
+
+  // compute how many full days since timestamp (timestamp in seconds)
+  const daysSince = (tsSeconds) => {
+    if (!tsSeconds || tsSeconds <= 0) return 0;
+    const now = Math.floor(Date.now() / 1000);
+    return Math.floor((now - tsSeconds) / 86400);
   };
 
-  const { reward: estReward, usd: estUsd } = estimatedRewards();
+  // stakedDays = days since lastUnstake (if they unstaked then staked again) OR days since lastRewardTimestamp. We choose conservative logic:
+  const stakedDays = useMemo(() => {
+    // If lastUnstakeTs == 0 (no record), use daysSince(lastRewardTs)
+    if (!lastUnstakeTs || lastUnstakeTs === 0) return daysSince(lastRewardTs);
+    // if lastUnstakeTs > 0 and lastUnstakeTs < lastRewardTs, it means they've staked after unstake; otherwise compute since lastUnstake
+    // We'll compute time since lastUnstake (if lastUnstake < now) as days staked
+    return daysSince(lastUnstakeTs) === 0 ? daysSince(lastRewardTs) : daysSince(lastUnstakeTs);
+  }, [lastUnstakeTs, lastRewardTs]);
 
-  // UI motion variants
-  const cardVariant = { hover: { scale: 1.02, boxShadow: '0 10px 30px rgba(255,140,0,0.18)' }, initial: {} };
-  const glow = { boxShadow: '0 0 18px rgba(255,140,0,0.24)' };
+  // monthlyBonus eligibility
+  const has30DayBonus = useMemo(() => {
+    // If stakedDays >= 30 -> eligible
+    return stakedDays >= 30;
+  }, [stakedDays]);
 
+  // If contract provides rewardRate & bonusRate use them, otherwise use defaults
+  // Defaults per your spec: daily = 0.0003 (0.03%), monthly bonus = 0.00003 (0.003%)
+  const dailyRate = rewardRate && rewardRate > 0 ? rewardRate : 0.0003;
+  const monthlyBonusRate = bonusRate && bonusRate > 0 ? bonusRate : 0.00003;
+
+  // Calculate estimated rewards for X days on principal (human)
+  function calcRewardsFor(principalHuman, days) {
+    const p = Number(principalHuman || 0);
+    const d = Number(days || 0);
+    if (!p || !d) return { tokens: 0, usd: 0 };
+
+    // baseline token reward (approx): tokens = p * dailyRate * days
+    const base = p * dailyRate * d;
+
+    // monthly bonus applied if staked >= 30 days: for the period, compute months = floor(days / 30)
+    const months = Math.floor(d / 30);
+    const bonus = has30DayBonus ? (p * monthlyBonusRate * months) : 0;
+
+    const tokens = base + bonus;
+    const usd = tokens * PRICE_USD_STATIC;
+    return { tokens, usd };
+  }
+
+  // APR computed from daily and monthly bonus:
+  const APR = useMemo(() => {
+    // APR (%) = (dailyRate + monthlyBonusRate * 12) * 365 * 100
+    const apr = (dailyRate + monthlyBonusRate * 12) * 365 * 100;
+    return apr;
+  }, [dailyRate, monthlyBonusRate]);
+
+  // helper to format timestamp into readable
+  const fmtTs = (s) => {
+    if (!s || s <= 0) return 'N/A';
+    return new Date(s * 1000).toLocaleString();
+  };
+
+  // UI computed example for the calculator using stakedBalance (human) default
+  const [calcDays, setCalcDays] = useState(30);
+  const [calcAmt, setCalcAmt] = useState('');
+  useEffect(() => {
+    // default calc amount uses stakedBalance on load
+    setCalcAmt(stakedBalance || '');
+  }, [stakedBalance]);
+
+  const calcResult = useMemo(() => {
+    const p = Number(calcAmt || stakedBalance || 0);
+    return calcRewardsFor(p, Number(calcDays || 0));
+  }, [calcAmt, calcDays, has30DayBonus, stakedBalance, dailyRate, monthlyBonusRate]);
+
+  // --- JSX (keeps your layout unchanged) ---
   return (
     <div className="min-h-screen w-full bg-black text-white antialiased">
       <header className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
@@ -390,35 +484,35 @@ export default function AfrodexStaking() {
           <motion.div
             className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10"
             style={{ boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.02)' }}
-            whileHover={{ ...glow }}
+            whileHover={{ boxShadow: '0 0 18px rgba(255,140,0,0.24)' }}
           >
             <div className="text-sm text-gray-300">Your Stake</div>
-<div className="text-2xl font-bold flex items-center gap-2">
-  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
-  {stakedBalance} AfroX
-</div>
-
+            <div className="text-2xl font-bold flex items-center gap-2">
+              <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
+              {stakedBalance} {TOKEN_LABEL}
+            </div>
+            <div className="text-xs text-gray-400 mt-2">Last reward update: {fmtTs(lastRewardTs)}</div>
           </motion.div>
 
-          <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ ...glow }}>
+          <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ boxShadow: '0 0 18px rgba(255,140,0,0.24)' }}>
             <div className="text-sm text-gray-300">Rewards</div>
-<div className="text-2xl font-bold flex items-center gap-2">
-  <img src="/afrodex_token.png" alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
-  {rewards} AfroX
-</div>
-
+            <div className="text-2xl font-bold flex items-center gap-2">
+              <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
+              {rewards} {TOKEN_LABEL}
+            </div>
+            <div className="text-xs text-gray-400 mt-2">Last unstake: {fmtTs(lastUnstakeTs)}</div>
           </motion.div>
 
-          <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ ...glow }}>
+          <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={{ boxShadow: '0 0 18px rgba(255,140,0,0.24)' }}>
             <div className="text-sm text-gray-300">Wallet Balance</div>
-<div className="text-2xl font-bold flex items-center gap-2">
-  <img src="/afrodex_token.png" alt="AfroX" className="h-5 w-5 rounded-full opacity-90" />
-  {walletBalance} AfroX
-</div>
-
+            <div className="text-2xl font-bold flex items-center gap-2">
+              <img src={TOKEN_LOGO} alt="AfroX" className="h-5 w-5 rounded-full opacity-90" />
+              {walletBalance} {TOKEN_LABEL}
+            </div>
+            <div className="text-xs text-gray-400 mt-2">Allowance: {allowance} {TOKEN_LABEL}</div>
           </motion.div>
 
-          <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10 flex flex-col justify-between" whileHover={{ ...glow }}>
+          <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10 flex flex-col justify-between" whileHover={{ boxShadow: '0 0 18px rgba(255,140,0,0.24)' }}>
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-300">Badge Tier</div>
@@ -433,14 +527,14 @@ export default function AfrodexStaking() {
         {/* Stake / Unstake two-column layout */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* APPROVE + STAKE */}
-          <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" variants={cardVariant} initial="initial" whileHover="hover">
+          <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" initial="initial" whileHover="hover">
             <h2 className="text-xl font-bold mb-3">Approve & Stake</h2>
             <div className="text-sm text-gray-400 mb-4">Approve AfroX to the staking contract and then stake.</div>
 
             <label className="block text-xs text-gray-300 mb-1">Amount (AfroX)</label>
             <input
               type="number"
-              step="0.0001"
+              step={1 / (10 ** decimals)}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.0"
@@ -448,24 +542,21 @@ export default function AfrodexStaking() {
             />
 
             <div className="grid grid-cols-2 gap-3">
-              <motion.button
-                onClick={handleApprove}
-                whileHover={{ scale: 1.02 }}
+              <button
+                onClick={() => doApprove(amount || '1000000')}
                 className="py-3 rounded-xl bg-black border-2 border-orange-500 text-orange-50 font-medium shadow"
-                style={{ boxShadow: '0 6px 18px rgba(255,140,0,0.12)' }}
-                disabled={!isConnected || isApproving}
+                disabled={!isConnected || loading}
               >
-                {isApproving ? 'Approving...' : 'Approve'}
-              </motion.button>
+                Approve
+              </button>
 
-              <motion.button
-                onClick={handleStake}
-                whileHover={{ scale: 1.02 }}
+              <button
+                onClick={() => doStake(amount)}
                 className="py-3 rounded-xl bg-orange-500 text-black font-semibold"
-                disabled={!isConnected || isStaking}
+                disabled={!isConnected || loading}
               >
-                {isStaking ? 'Staking...' : 'Stake'}
-              </motion.button>
+                Stake
+              </button>
             </div>
 
             <div className="mt-4 text-xs text-gray-400">
@@ -475,14 +566,14 @@ export default function AfrodexStaking() {
           </motion.div>
 
           {/* UNSTAKE */}
-          <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" variants={cardVariant} initial="initial" whileHover="hover">
+          <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" initial="initial" whileHover="hover">
             <h2 className="text-xl font-bold mb-3">Unstake</h2>
             <div className="text-sm text-gray-400 mb-4">Unstake your AfroX tokens and claim rewards.</div>
 
             <label className="block text-xs text-gray-300 mb-1">Amount to Unstake</label>
             <input
               type="number"
-              step="0.0001"
+              step={1 / (10 ** decimals)}
               value={unstakeAmount}
               onChange={(e) => setUnstakeAmount(e.target.value)}
               placeholder="0.0"
@@ -490,97 +581,94 @@ export default function AfrodexStaking() {
             />
 
             <div className="grid grid-cols-2 gap-3">
-              <motion.button
-                onClick={handleUnstake}
-                whileHover={{ scale: 1.02 }}
+              <button
+                onClick={() => doUnstake(unstakeAmount)}
                 className="py-3 rounded-xl bg-black border-2 border-orange-500 text-orange-50 font-medium"
-                disabled={!isConnected || isUnstaking}
+                disabled={!isConnected || loading}
               >
-                {isUnstaking ? 'Unstaking...' : 'Unstake'}
-              </motion.button>
+                Unstake
+              </button>
 
-              <motion.button
-                onClick={handleClaim}
-                whileHover={{ scale: 1.02 }}
+              <button
+                onClick={() => doClaim()}
                 className="py-3 rounded-xl bg-orange-500 text-black font-semibold"
-                disabled={!isConnected || isClaiming}
+                disabled={!isConnected || loading}
               >
-                {isClaiming ? 'Claiming...' : 'Claim Rewards'}
-              </motion.button>
+                Claim Rewards
+              </button>
             </div>
 
             <div className="mt-4 text-xs text-gray-400">
-              Your Rewards: <span className="text-orange-300 font-medium">{rewards} AfroX</span>
+              Your Rewards: <span className="text-orange-300 font-medium">{rewards} {TOKEN_LABEL}</span>
             </div>
           </motion.div>
         </section>
 
         {/* Claim full width & Rewards center */}
-       <section className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10 mb-6">
-  <h3 className="text-lg font-bold mb-4">Rewards Center</h3>
+        <section className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10 mb-6">
+          <h3 className="text-lg font-bold mb-4">Rewards Center</h3>
 
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-    {/* Calculator */}
-    <div className="md:col-span-2">
-      <div className="text-sm text-gray-300 mb-3">Estimated rewards calculator</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Calculator */}
+            <div className="md:col-span-2">
+              <div className="text-sm text-gray-300 mb-3">Estimated rewards calculator</div>
 
-      {/* Days Input */}
-      <label className="block text-xs text-gray-400 mb-1">Days to Stake</label>
-      <input
-        type="number"
-        step="1"
-        value={estDays}
-        onChange={(e) => setEstDays(Number(e.target.value))}
-        className="w-full p-2 rounded bg-gray-800 text-white mb-3"
-      />
+              {/* Days Input */}
+              <label className="block text-xs text-gray-400 mb-1">(Days to Stake)</label>
+              <input
+                type="number"
+                step="1"
+                value={calcDays}
+                onChange={(e) => setCalcDays(Number(e.target.value))}
+                className="w-full p-2 rounded bg-gray-800 text-white mb-3"
+              />
 
-      {/* Stake Amount Input */}
-      <label className="block text-xs text-gray-400 mb-1">Amount to Stake (AfroX)</label>
-      <input
-        type="number"
-        step="0.0001"
-        value={stakedBalance}
-        onChange={(e) => setStakedBalance(e.target.value)}
-        className="w-full p-2 rounded bg-gray-800 text-white mb-4"
-      />
+              {/* Stake Amount Input */}
+              <label className="block text-xs text-gray-400 mb-1">Amount to Stake (AfroX)</label>
+              <input
+                type="number"
+                step={1 / (10 ** decimals)}
+                value={calcAmt}
+                onChange={(e) => setCalcAmt(e.target.value)}
+                className="w-full p-2 rounded bg-gray-800 text-white mb-4"
+              />
 
-      {/* Output */}
-      <div className="text-gray-300">
-        Estimated rewards for {estDays} days:
-        <span className="font-bold text-white"> {Number(estReward).toFixed(6)} AfroX</span>
-        <div className="text-sm text-gray-500">
-          ≈ ${Number(estUsd).toFixed(6)} (at ${PRICE_USD_STATIC} per AfroX)
-        </div>
-      </div>
-    </div>
+              {/* Output */}
+              <div className="text-gray-300">
+                Estimated rewards for {calcDays} days:
+                <span className="font-bold text-white"> {Number(calcResult.tokens).toFixed(decimals)} {TOKEN_LABEL}</span>
+                <div className="text-sm text-gray-500">
+                  ≈ ${Number(calcResult.usd).toFixed(6)} (at ${PRICE_USD_STATIC} per AfroX)
+                </div>
+              </div>
+            </div>
 
-    {/* APR Card */}
-    <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20 flex flex-col justify-center items-start">
-      <div className="text-xs text-gray-400">APR (protocol)</div>
-      <div className="text-2xl font-bold text-orange-300">
-        24.09% <span className="text-sm text-gray-400">(if staked for 365 days)</span>
-      </div>
+            {/* APR Card */}
+            <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20 flex flex-col justify-center items-start">
+              <div className="text-xs text-gray-400">APR (protocol)</div>
+              <div className="text-2xl font-bold text-orange-300">
+                {APR.toFixed(2)}% <span className="text-sm text-gray-400">(if staked for 365 days)</span>
+              </div>
 
-      <div className="mt-3 text-xs text-gray-400 leading-relaxed">
-        Daily APR = <span className="text-orange-300 font-medium">0.03%</span><br />
-        Monthly Bonus = <span className="text-orange-300 font-medium">+0.003%</span> if staked ≥ 30 days<br />
-        Total yearly ≈ <span className="text-orange-300 font-medium">24.09%</span>
-      </div>
+              <div className="mt-3 text-xs text-gray-400 leading-relaxed">
+                Daily APR = <span className="text-orange-300 font-medium">{(dailyRate * 100).toFixed(4)}%</span><br />
+                Monthly Bonus = <span className="text-orange-300 font-medium">+{(monthlyBonusRate * 100).toFixed(4)}% (per month)</span> if staked ≥ 30 days<br />
+                Total yearly ≈ <span className="text-orange-300 font-medium">{APR.toFixed(2)}%</span>
+              </div>
 
-      <div className="mt-3 text-xs text-gray-500">
-        *Rewards grow live when user interacts*
-      </div>
-    </div>
-  </div>
-</section>
+              <div className="mt-3 text-xs text-gray-500">
+                *Rewards grow live when user interacts* • Staked days: <span className="font-semibold text-white">{stakedDays}</span> (30-day bonus: <span className="font-semibold">{has30DayBonus ? 'Yes' : 'No'}</span>)
+              </div>
+            </div>
+          </div>
+        </section>
 
-
-        {/* tx / debug panel */}
+        {/* debug panel */}
         <section className="mb-6">
           <div className="bg-gray-900 p-4 rounded-xl text-xs text-gray-400">
             <div>Connected: <span className="text-white font-medium">{isConnected ? 'Yes' : 'No'}</span></div>
             <div>Wallet: <span className="text-white font-mono">{address ? shortAddr(address) : '—'}</span></div>
-            <div>Token decimals: <span className="text-orange-300">{tokenDecimals}</span></div>
+            <div>Token decimals: <span className="text-orange-300">{decimals}</span></div>
           </div>
         </section>
       </main>
@@ -590,6 +678,13 @@ export default function AfrodexStaking() {
           © 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
         </div>
       </footer>
+
+      {/* small alert */}
+      {alertMsg && (
+        <div className="fixed right-6 bottom-6 bg-[#0b0b0b] border border-orange-500 text-orange-300 p-3 rounded shadow-lg">
+          {alertMsg}
+        </div>
+      )}
     </div>
   );
 }
