@@ -1,2 +1,1 @@
-export { tokenAbi } from "./tokenAbi";
-export { stakingAbi } from "./stakingAbi";
+export { STAKING_ABI } from "./stakingAbi";
