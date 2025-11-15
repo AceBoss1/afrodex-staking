@@ -22,7 +22,7 @@ const ABI = [{
 const addr = process.argv[2];
 
 const result = await client.readContract({
-  address: "0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c",
+  address: "0x08130635368AA28b217a4dfb68E1bF8dC525621C",
   abi: ABI,
   functionName: "viewStakeInfoOf",
   args: [addr]
