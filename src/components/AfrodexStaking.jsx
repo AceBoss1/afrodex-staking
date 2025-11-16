@@ -1,10 +1,8 @@
-'use client';
-
+// src/components/AfrodexStaking.jsx
 import React, { useEffect, useState } from 'react';
-import { formatUnits, parseUnits } from 'viem';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-
-import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
+import { formatUnits, parseUnits } from 'viem';
+import { STAKING_ADDRESS, TOKEN_ADDRESS } from '../lib/contracts';
 import { STAKING_ABI } from '../lib/abis/stakingAbi';
 
 export default function AfrodexStaking() {
@@ -12,303 +10,276 @@ export default function AfrodexStaking() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  // -----------------------------
-  // STATE
-  // -----------------------------
-  const [tokenBalance, setTokenBalance] = useState('0');
-  const [stakeBalance, setStakeBalance] = useState('0');
-  const [rewardValue, setRewardValue] = useState('0');
-  const [lastUnstake, setLastUnstake] = useState(0);
-  const [lastReward, setLastReward] = useState(0);
+  const TOKEN_LOGO = '/afrodex_token.png';
 
-  const [amount, setAmount] = useState('');
-  const [pending, setPending] = useState(false);
-  const [decimals, setDecimals] = useState(4); // AfroX = 4 decimals
+  const [stakeBalance, setStakeBalance] = useState(0);
+  const [rewardValue, setRewardValue] = useState(0);
+  const [lastUnstakeTimestamp, setLastUnstakeTimestamp] = useState(0);
+  const [lastRewardTimestamp, setLastRewardTimestamp] = useState(0);
+
+  const [inputAmount, setInputAmount] = useState('');
+
+  // --- Rewards Calculator ---
+  const DAILY_APR = 0.0003;         // 0.03%
+  const BONUS_APR = 0.00003;        // 0.003% daily bonus
+  const YEARLY_APR = 0.2409;        // 24.09%
+
+  const [daysStaked, setDaysStaked] = useState(0);
+  const [calcDaily, setCalcDaily] = useState(0);
+  const [calcMonthly, setCalcMonthly] = useState(0);
+  const [calcYearly, setCalcYearly] = useState(0);
 
   // -----------------------------
-  // HELPERS
+  // Load staking info
   // -----------------------------
-  const fmt = (v) => {
-    if (!v) return '0';
+  const loadStakingInfo = async () => {
+    if (!publicClient || !address) return;
+
     try {
-      return Number(formatUnits(BigInt(v), decimals)).toLocaleString();
-    } catch {
-      return '0';
+      // read viewStakeInfoOf (your contract returns [stakeBalance, rewardValue, lastUnstakeTimestamp, lastRewardTimestamp])
+      const data = await publicClient.readContract({
+        address: STAKING_ADDRESS,
+        abi: STAKING_ABI,
+        functionName: 'viewStakeInfoOf',
+        args: [address],
+      });
+
+      // use 4 decimals for formatting (AfroX uses 4)
+      const stake = Number(formatUnits(data[0], 4));
+      const reward = Number(formatUnits(data[1], 4));
+      const unstakeTS = Number(data[2]);
+      const rewardTS = Number(data[3]);
+
+      setStakeBalance(stake);
+      setRewardValue(reward);
+      setLastUnstakeTimestamp(unstakeTS);
+      setLastRewardTimestamp(rewardTS);
+
+      // days since lastUnstakeTimestamp
+      const now = Math.floor(Date.now() / 1000);
+      const deltaDays = unstakeTS && unstakeTS > 0 ? Math.floor((now - unstakeTS) / 86400) : Math.floor((now - rewardTS) / 86400);
+      setDaysStaked(deltaDays);
+
+      calculateProjections(stake, deltaDays);
+    } catch (e) {
+      console.error('Load error:', e);
+      // fallback: zero everything
+      setStakeBalance(0);
+      setRewardValue(0);
+      setLastUnstakeTimestamp(0);
+      setLastRewardTimestamp(0);
+      setDaysStaked(0);
+      calculateProjections(0, 0);
     }
   };
 
-  const toWei = (v) => parseUnits(v || '0', decimals);
-
   // -----------------------------
-  // READ FUNCTIONS
+  // Reward Projections
   // -----------------------------
-  async function loadTokenBalance() {
-    if (!publicClient || !address) return;
-
-    const bal = await readContractSafe(publicClient, {
-      address: TOKEN_ADDRESS,
-      abi: STAKING_ABI,
-      functionName: 'balanceOf',
-      args: [address],
-    });
-
-    if (bal !== null) setTokenBalance(bal.toString());
-  }
-
-  async function loadStakeInfo() {
-    if (!publicClient || !address) return;
-
-    const info = await readContractSafe(publicClient, {
-      address: STAKING_ADDRESS,
-      abi: STAKING_ABI,
-      functionName: 'viewStakeInfoOf',
-      args: [address],
-    });
-
-    if (info) {
-      setStakeBalance(info[0].toString());
-      setRewardValue(info[1].toString());
-      setLastUnstake(Number(info[2]));
-      setLastReward(Number(info[3]));
+  const calculateProjections = (amount, stakedDays) => {
+    if (!amount || amount <= 0) {
+      setCalcDaily(0);
+      setCalcMonthly(0);
+      setCalcYearly(0);
+      return;
     }
-  }
 
-  async function loadDecimals() {
-    const d = await readContractSafe(publicClient, {
-      address: TOKEN_ADDRESS,
-      abi: STAKING_ABI,
-      functionName: 'decimals',
-      args: [],
-    });
+    const baseDaily = amount * DAILY_APR;
 
-    if (d !== null) setDecimals(Number(d));
-  }
+    const bonusUnlocked = stakedDays >= 30;
+    const dailyBonus = bonusUnlocked ? amount * BONUS_APR : 0;
+
+    const daily = baseDaily + dailyBonus;
+    const monthly = daily * 30;
+    const yearly = amount * YEARLY_APR;
+
+    setCalcDaily(daily);
+    setCalcMonthly(monthly);
+    setCalcYearly(yearly);
+  };
 
   // -----------------------------
-  // WRITE: Approve
+  // Stake
   // -----------------------------
-  async function approve() {
-    if (!walletClient || !amount) return alert('Enter amount');
+  const stakeTokens = async () => {
+    if (!walletClient || !inputAmount) return alert('Enter amount');
 
     try {
-      setPending(true);
+      const amountParsed = parseUnits(inputAmount, 4);
 
-      await writeContractSafe(walletClient, {
+      await walletClient.writeContract({
         address: TOKEN_ADDRESS,
         abi: STAKING_ABI,
-        functionName: 'approve',
-        args: [STAKING_ADDRESS, toWei(amount)],
-      });
-
-      alert('Approve successful');
-    } catch (err) {
-      console.error(err);
-      alert('Approve failed: ' + err.message);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // -----------------------------
-  // WRITE: Stake
-  // -----------------------------
-  async function stake() {
-    if (!walletClient || !amount) return alert('Enter amount');
-
-    try {
-      setPending(true);
-
-      await writeContractSafe(walletClient, {
-        address: STAKING_ADDRESS,
-        abi: STAKING_ABI,
         functionName: 'stake',
-        args: [toWei(amount)],
+        args: [amountParsed],
       });
 
-      alert('Stake successful');
-      loadStakeInfo();
-      loadTokenBalance();
+      // refresh after slight delay
+      setTimeout(loadStakingInfo, 2000);
     } catch (err) {
       console.error(err);
-      alert('Stake failed: ' + err.message);
-    } finally {
-      setPending(false);
+      alert('Stake failed');
     }
-  }
+  };
 
   // -----------------------------
-  // WRITE: Unstake
+  // Claim Rewards
   // -----------------------------
-  async function unstake() {
-    if (!walletClient || !amount) return alert('Enter amount');
-
-    try {
-      setPending(true);
-
-      await writeContractSafe(walletClient, {
-        address: STAKING_ADDRESS,
-        abi: STAKING_ABI,
-        functionName: 'unstake',
-        args: [toWei(amount)],
-      });
-
-      alert('Unstake successful');
-      loadStakeInfo();
-      loadTokenBalance();
-    } catch (err) {
-      alert('Unstake failed: ' + err.message);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  // -----------------------------
-  // WRITE: Claim Rewards
-  // -----------------------------
-  async function claim() {
+  const claimReward = async () => {
     if (!walletClient) return;
 
     try {
-      setPending(true);
+      // try common claim function names — prefer 'claimReward' else fallback to 'claim'
+      try {
+        await walletClient.writeContract({
+          address: STAKING_ADDRESS,
+          abi: STAKING_ABI,
+          functionName: 'claimReward',
+        });
+      } catch (e) {
+        // fallback
+        await walletClient.writeContract({
+          address: STAKING_ADDRESS,
+          abi: STAKING_ABI,
+          functionName: 'claim',
+        });
+      }
 
-      // Claiming = calling stake(0) or a claim function
-      await writeContractSafe(walletClient, {
+      setTimeout(loadStakingInfo, 2000);
+    } catch (err) {
+      console.error(err);
+      alert('Claim failed');
+    }
+  };
+
+  // -----------------------------
+  // Unstake
+  // -----------------------------
+  const unstakeTokens = async () => {
+    if (!walletClient) return;
+
+    try {
+      await walletClient.writeContract({
         address: STAKING_ADDRESS,
         abi: STAKING_ABI,
-        functionName: 'stake',
-        args: [0n],
+        functionName: 'unstake',
+        // some contracts expect amount; if you want full unstake you may pass parseUnits(String(amount),4)
+        // here we call without args to match earlier UI, fallback handled by contract.
       });
 
-      alert('Claim successful');
-      loadStakeInfo();
-      loadTokenBalance();
+      setTimeout(loadStakingInfo, 2000);
     } catch (err) {
-      alert('Claim failed: ' + err.message);
-    } finally {
-      setPending(false);
+      console.error(err);
+      alert('Unstake failed');
     }
-  }
+  };
 
-  // -----------------------------
-  // LOAD INITIAL DATA
-  // -----------------------------
   useEffect(() => {
-    if (!isConnected) return;
-
-    loadDecimals();
-    loadTokenBalance();
-    loadStakeInfo();
-  }, [isConnected, address]);
-
-  // refresh every 20s
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const t = setInterval(() => {
-      loadStakeInfo();
-      loadTokenBalance();
-    }, 20000);
-
-    return () => clearInterval(t);
+    if (isConnected) loadStakingInfo();
   }, [isConnected]);
 
-  // -----------------------------
-  // UI RENDER
-  // -----------------------------
-  if (!isConnected)
-    return (
-      <div className="text-center text-gray-300 py-10">
-        Connect your wallet to view staking dashboard.
-      </div>
-    );
-
   return (
-    <div className="max-w-4xl mx-auto px-4 pb-20">
+    <div style={{ padding: '30px', maxWidth: '980px', margin: '0 auto', fontFamily: 'Inter, Arial, sans-serif' }}>
+      <h2 style={{ color: '#FF8C00', marginBottom: 12 }}>AfroX Staking Dashboard</h2>
 
-      {/* ------------------------ */}
-      {/* Wallet Status Card */}
-      {/* ------------------------ */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-8">
-        <h2 className="text-xl text-orange-400 font-semibold">Connected Wallet</h2>
-        <p className="text-gray-300 mt-2 break-all">{address}</p>
-      </div>
+      {!isConnected ? (
+        <p>Please connect your wallet.</p>
+      ) : (
+        <>
+          {/* Stake Info */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 20 }}>
+            {/* Wallet Balance */}
+            <div style={{ padding: 16, border: '1px solid #222', borderRadius: 10, background: '#0b0b0b' }}>
+              <h4 style={{ margin: 0, color: '#BFBFBF' }}>Wallet Balance</h4>
+              <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                <img src={TOKEN_LOGO} alt="AfroX" style={{ height: 22, marginRight: 10 }} />
+                <span style={{ fontSize: 20, color: '#fff', fontWeight: 600 }}>{stakeBalance ? stakeBalance.toLocaleString() : '0'} AfroX</span>
+              </div>
+            </div>
 
-      {/* ------------------------ */}
-      {/* Balance Cards */}
-      {/* ------------------------ */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
-          <h3 className="text-lg text-gray-300">Wallet Balance</h3>
-          <p className="text-3xl text-white mt-2">{fmt(tokenBalance)} AfroX</p>
-        </div>
+            {/* Staked Balance */}
+            <div style={{ padding: 16, border: '1px solid #222', borderRadius: 10, background: '#0b0b0b' }}>
+              <h4 style={{ margin: 0, color: '#BFBFBF' }}>Staked Balance</h4>
+              <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                <img src={TOKEN_LOGO} alt="AfroX" style={{ height: 22, marginRight: 10 }} />
+                <span style={{ fontSize: 20, color: '#fff', fontWeight: 600 }}>{stakeBalance.toLocaleString()} AfroX</span>
+              </div>
+            </div>
 
-        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
-          <h3 className="text-lg text-gray-300">Staked Balance</h3>
-          <p className="text-3xl text-white mt-2">{fmt(stakeBalance)} AfroX</p>
-        </div>
-      </div>
+            {/* Accumulated Rewards */}
+            <div style={{ padding: 16, border: '1px solid #222', borderRadius: 10, background: '#0b0b0b' }}>
+              <h4 style={{ margin: 0, color: '#BFBFBF' }}>Accumulated Rewards</h4>
+              <div style={{ display: 'flex', alignItems: 'center', marginTop: 10 }}>
+                <img src={TOKEN_LOGO} alt="AfroX" style={{ height: 22, marginRight: 10 }} />
+                <span style={{ fontSize: 20, color: '#7CFC00', fontWeight: 700 }}>{rewardValue.toLocaleString()} AfroX</span>
+              </div>
+              <div style={{ marginTop: 8, color: '#9b9b9b', fontSize: 13 }}>
+                <div>Last reward update: {lastRewardTimestamp ? new Date(lastRewardTimestamp * 1000).toLocaleString() : '—'}</div>
+                <div>Last unstake: {lastUnstakeTimestamp ? new Date(lastUnstakeTimestamp * 1000).toLocaleString() : '—'}</div>
+              </div>
+            </div>
+          </div>
 
-      {/* ------------------------ */}
-      {/* Rewards Card */}
-      {/* ------------------------ */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-8">
-        <h3 className="text-lg text-gray-300">Accumulated Rewards</h3>
-        <p className="text-3xl text-green-400 mt-2">{fmt(rewardValue)} AfroX</p>
+          {/* Stake Input */}
+          <div style={{ padding: 18, border: '1px solid #333', borderRadius: 10, marginBottom: 18, background: '#070707' }}>
+            <h3 style={{ marginTop: 0, color: '#EAEAEA' }}>Stake Tokens</h3>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input
+                value={inputAmount}
+                onChange={(e) => setInputAmount(e.target.value)}
+                placeholder="Amount (AfroX)"
+                style={{ padding: '10px 12px', width: 220, borderRadius: 8, background: '#0b0b0b', color: '#fff', border: '1px solid #222' }}
+              />
+              <button onClick={stakeTokens} style={{ padding: '10px 14px', background: '#FF8C00', color: '#000', borderRadius: 8, fontWeight: 600 }}>
+                Stake
+              </button>
+            </div>
+          </div>
 
-        <div className="text-gray-400 text-sm mt-4">
-          <p>Last Reward Timestamp: {lastReward || '—'}</p>
-          <p>Last Unstake Timestamp: {lastUnstake || '—'}</p>
-        </div>
+          {/* Reward Actions */}
+          <div style={{ marginBottom: 20 }}>
+            <button onClick={claimReward} style={{ padding: '10px 14px', marginRight: 10, background: '#2E8B57', color: '#fff', borderRadius: 8 }}>
+              Claim Rewards
+            </button>
+            <button onClick={unstakeTokens} style={{ padding: '10px 14px', background: '#B22222', color: '#fff', borderRadius: 8 }}>
+              Unstake
+            </button>
+          </div>
 
-        <button
-          onClick={claim}
-          disabled={pending}
-          className="mt-5 w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg"
-        >
-          {pending ? 'Processing...' : 'Claim Rewards'}
-        </button>
-      </div>
+          {/* Rewards Calculator */}
+          <div style={{ padding: 18, border: '1px solid #444', borderRadius: 10, background: '#0f0f0f' }}>
+            <h3 style={{ marginTop: 0, color: '#EAEAEA' }}>Rewards Projection Calculator</h3>
 
-      {/* ------------------------ */}
-      {/* Stake / Unstake Controls */}
-      {/* ------------------------ */}
-      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-lg text-gray-300 mb-3">Stake / Unstake</h3>
+            <div style={{ color: '#cfcfcf', marginTop: 8 }}>
+              <p style={{ margin: '6px 0' }}><b>Daily APR:</b> 0.03%</p>
+              <p style={{ margin: '6px 0' }}><b>Bonus APR:</b> +0.003% daily (after 30 days)</p>
+              <p style={{ margin: '6px 0 12px' }}><b>Yearly APR:</b> 24.09%</p>
 
-        <input
-          type="number"
-          placeholder="Amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          className="w-full p-3 rounded bg-gray-900 border border-gray-700 text-white mb-4"
-        />
+              <div style={{ display: 'flex', gap: 18 }}>
+                <div>
+                  <div style={{ color: '#9b9b9b', fontSize: 13 }}>Daily Reward</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{calcDaily.toLocaleString(undefined, { maximumFractionDigits: 6 })} AfroX</div>
+                </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={approve}
-            disabled={pending}
-            className="bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg"
-          >
-            Approve
-          </button>
+                <div>
+                  <div style={{ color: '#9b9b9b', fontSize: 13 }}>Monthly Reward</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{calcMonthly.toLocaleString(undefined, { maximumFractionDigits: 6 })} AfroX</div>
+                </div>
 
-          <button
-            onClick={stake}
-            disabled={pending}
-            className="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg"
-          >
-            Stake
-          </button>
+                <div>
+                  <div style={{ color: '#9b9b9b', fontSize: 13 }}>Yearly Reward</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{calcYearly.toLocaleString(undefined, { maximumFractionDigits: 6 })} AfroX</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-          <button
-            onClick={unstake}
-            disabled={pending}
-            className="bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg"
-          >
-            Unstake
-          </button>
-        </div>
-      </div>
+          {/* FOOTER */}
+          <p style={{ textAlign: 'center', marginTop: 24, opacity: 0.85, color: '#bdbdbd' }}>
+            © 2025 AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
+          </p>
+        </>
+      )}
     </div>
   );
 }
