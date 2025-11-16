@@ -8,12 +8,12 @@ export default function ConnectHeader() {
     <header className="w-full py-8 bg-black border-b border-gray-800">
       <div className="max-w-6xl mx-auto text-center px-6">
 
-        <h2 className="text-lg text-gray-300 mb-4">
+        <h2 className="text-sm text-gray-300 mb-3">
           Staking Powered by AfroDex Community of Trust & AfroDex Ambassadors
         </h2>
 
         <div className="flex items-center justify-center my-2">
-          <ConnectButton label="Connect Wallet" />
+          <ConnectButton />
         </div>
 
         <h1 className="text-orange-400 text-3xl font-bold flex items-center justify-center gap-4 mt-4">
