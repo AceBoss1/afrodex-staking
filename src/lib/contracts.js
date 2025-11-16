@@ -1,30 +1,39 @@
-// src/lib/contracts.js
-import { STAKING_ABI } from './abis/stakingAbi';
+import { STAKING_ABI } from './abis';
 
-// Primary address: YOU confirmed this contract is the token + staking implementation
+
 export const STAKING_ADDRESS = process.env.NEXT_PUBLIC_STAKING_CONTRACT_ADDRESS || '0x30715f7679b3e5574fb2cc9cb4c9e5994109ed8c';
-// since token is implemented in same contract, token address === staking address
-export const TOKEN_ADDRESS = STAKING_ADDRESS;
+export const TOKEN_ADDRESS = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS || STAKING_ADDRESS;
 
-// small wrappers that return null on failure (so UI doesn't crash)
+
+// Read wrapper returns null on failure
 export async function readContractSafe(publicClient, readArgs) {
-  try {
-    // readArgs example: { address, abi, functionName, args }
-    return await publicClient.readContract(readArgs);
-  } catch (err) {
-    // console.debug('readContractSafe fail', readArgs.functionName, err?.message ?? err);
-    return null;
-  }
+try {
+return await publicClient.readContract(readArgs);
+} catch (err) {
+// console.debug('readContractSafe fail', readArgs?.functionName, err?.message ?? err);
+return null;
+}
 }
 
-// walletClient: should be the object returned by useWalletClient()
-// writeArgs: { address, abi, functionName, args }
+
+// Write wrapper: attempts to use walletClient.writeContract, else throws with guidance
 export async function writeContractSafe(walletClient, writeArgs) {
-  if (!walletClient) throw new Error('Wallet client not available');
-  try {
-    // wagmi walletClient.writeContract returns differing shapes depending on provider
-    return await walletClient.writeContract(writeArgs);
-  } catch (err) {
-    throw err;
-  }
+// writeArgs example: { address, abi, functionName, args }
+if (!walletClient) throw new Error('Wallet client not available');
+
+
+// Preferred API: walletClient.writeContract (wagmi/v1+ viem wrapper)
+if (typeof walletClient.writeContract === 'function') {
+return await walletClient.writeContract(writeArgs);
+}
+
+
+// Some wallet clients expose `request` (like wagmi older return shapes). We can try to build a simple eth_sendTransaction
+if (typeof walletClient.request === 'function') {
+// We cannot reliably build calldata here without a signer/encoder. Throw explicit error explaining the fix.
+throw new Error('walletClient.request exists but writeContract() not available. Use getWalletClient() from @wagmi/core or upgrade wagmi so walletClient.writeContract is provided.');
+}
+
+
+throw new Error('wallet client does not support writeContract(). Use getWalletClient() or update wagmi/wallet adapter.');
 }
