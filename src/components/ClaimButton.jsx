@@ -7,6 +7,12 @@ export default function ClaimButton({ contractAddress }) {
   const { address } = useAccount();
   const { writeContractAsync } = useWriteContract();
 
+  export async function getPendingRewards(wallet) {
+  const res = await fetch(`/api/claim/list?wallet=${wallet}`);
+  return await res.json(); 
+}
+
+
   async function handleClaim() {
     if (!address) return alert("Connect wallet");
 
