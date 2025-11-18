@@ -16,21 +16,20 @@
 
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1",
-      "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      "dest": "/api/$1"
     },
 
     {
       "src": "/staking",
-      "dest": "/staking/index.html"
+      "dest": "/staking"
     },
     {
       "src": "/ambassador",
-      "dest": "/ambassador/index.html"
+      "dest": "/ambassador"
     },
     {
       "src": "/community",
-      "dest": "/community/index.html"
+      "dest": "/community"
     },
 
     { "src": "/(.*)", "dest": "/" }
@@ -41,12 +40,6 @@
       "runtime": "nodejs18.x",
       "maxDuration": 30,
       "memory": 3008
-    }
-  },
-
-  "overrides": {
-    "next.config.js": {
-      "path": "next.config.js"
     }
   }
 }
