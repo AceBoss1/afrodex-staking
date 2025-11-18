@@ -1,21 +1,52 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "installCommand": "npm install --omit=optional",
   "framework": "nextjs",
+
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --omit=optional",
+  "outputDirectory": ".next",
+
   "env": {
     "NEXT_TELEMETRY_DISABLED": "1",
     "NODE_ENV": "production"
-  }
-}
+  },
 
+  "routes": [
+    { "handle": "filesystem" },
 
-{
-  "crons": [
     {
-      "path": "/api/cron/monthly",
-      "schedule": "0 0 1 * *"
+      "src": "/api/(.*)",
+      "dest": "/api/$1",
+      "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    },
+
+    {
+      "src": "/staking",
+      "dest": "/staking/index.html"
+    },
+    {
+      "src": "/ambassador",
+      "dest": "/ambassador/index.html"
+    },
+    {
+      "src": "/community",
+      "dest": "/community/index.html"
+    },
+
+    { "src": "/(.*)", "dest": "/" }
+  ],
+
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 30,
+      "memory": 3008
     }
-  ]
+  },
+
+  "overrides": {
+    "next.config.js": {
+      "path": "next.config.js"
+    }
+  }
 }
