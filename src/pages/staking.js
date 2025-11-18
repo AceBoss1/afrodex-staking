@@ -1,5 +1,10 @@
-import ConnectHeader from "../src/components/ConnectHeader";
-import AfrodexStaking from "../src/components/AfrodexStaking";
+import dynamic from 'next/dynamic';
+import ConnectHeader from '../components/ConnectHeader';
+
+const AfrodexStaking = dynamic(
+  () => import('../components/AfrodexStaking'),
+  { ssr: false }
+);
 
 export default function StakingPage() {
   return (
