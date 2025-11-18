@@ -11,30 +11,6 @@
     "NODE_ENV": "production"
   },
 
-  "routes": [
-    { "handle": "filesystem" },
-
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-
-    {
-      "src": "/staking",
-      "dest": "/staking"
-    },
-    {
-      "src": "/ambassador",
-      "dest": "/ambassador"
-    },
-    {
-      "src": "/community",
-      "dest": "/community"
-    },
-
-    { "src": "/(.*)", "dest": "/" }
-  ],
-
   "functions": {
     "api/**/*.js": {
       "runtime": "nodejs18.x",
