@@ -31,7 +31,7 @@ export default function AfrodexStaking() {
 
   // token decimals & on-chain values
   const [decimals, setDecimals] = useState(DEFAULT_DECIMALS);
-  const [walletBalance, setWalletBalance] = useState('0'); // human string
+  const [walletBalance, setWalletBalance] = useState('0'); // human string (e.g. "12345.6789")
   const [stakedBalance, setStakedBalance] = useState('0'); // human string
   const [rewardsAccum, setRewardsAccum] = useState('0');  // human string
   const [allowance, setAllowance] = useState('0'); // not shown by default, kept for approve logic
@@ -85,7 +85,40 @@ export default function AfrodexStaking() {
     }
   }, [decimals]);
 
-  // ---- On-chain fetcher ----
+  // -----------------------------
+  // Wallet balance loader (picked from your working version)
+  // This ensures wallet balance reflects correctly
+  // -----------------------------
+  async function loadTokenBalance() {
+    if (!publicClient) return;
+    if (!address) {
+      setWalletBalance('0');
+      return;
+    }
+
+    try {
+      const bal = await readContractSafe(publicClient, {
+        address: TOKEN_ADDRESS,
+        abi: AFROX_PROXY_ABI,
+        functionName: 'balanceOf',
+        args: [address],
+      });
+
+      // formatUnits returns a string like "123.4567"
+      if (bal !== null && bal !== undefined) {
+        const human = formatUnits(bal, decimals);
+        setWalletBalance(human);
+      } else {
+        setWalletBalance('0');
+      }
+    } catch (err) {
+      // if anything fails, gracefully set to 0 (don't crash UI)
+      // console.error('loadTokenBalance error', err);
+      setWalletBalance('0');
+    }
+  }
+
+  // ---- On-chain fetcher (keeps rest of reads) ----
   const fetchOnChain = useCallback(async () => {
     if (!publicClient) return;
 
@@ -100,53 +133,21 @@ export default function AfrodexStaking() {
       const d = decRaw !== null && decRaw !== undefined ? Number(decRaw) : DEFAULT_DECIMALS;
       setDecimals(Number.isFinite(d) ? d : DEFAULT_DECIMALS);
 
-     '''Updated Wallet Balance Functions
+      // wallet balance: use the working loader
+      await loadTokenBalance();
 
-// -----------------------------
-// READ FUNCTIONS (Updated)
-// -----------------------------
-async function loadTokenBalance() {
-  if (!publicClient || !address) return;
-
-  const bal = await readContractSafe(publicClient, {
-    address: TOKEN_ADDRESS,
-    abi: STAKING_ABI,
-    functionName: 'balanceOf',
-    args: [address],
-  });
-
-  if (bal !== null) setTokenBalance(bal.toString());
-}
-
-async function loadDecimals() {
-  const d = await readContractSafe(publicClient, {
-    address: TOKEN_ADDRESS,
-    abi: STAKING_ABI,
-    functionName: 'decimals',
-    args: [],
-  });
-
-  if (d !== null) setDecimals(Number(d));
-}
-
-// Insert loadTokenBalance + loadDecimals into the main lifecycle:
-// useEffect(() => {
-//   if (!isConnected) return;
-//   loadDecimals();
-//   loadTokenBalance();
-//   loadStakeInfo();
-// }, [isConnected, address]);
-
-// useEffect(() => {
-//   if (!isConnected) return;
-//   const t = setInterval(() => {
-//     loadStakeInfo();
-//     loadTokenBalance();
-//   }, 20000);
-//   return () => clearInterval(t);
-// }, [isConnected]);
-'''}]}
-
+      // allowance (owner -> staking)
+      if (address) {
+        const allowRaw = await readContractSafe(publicClient, {
+          address: TOKEN_ADDRESS,
+          abi: AFROX_PROXY_ABI,
+          functionName: 'allowance',
+          args: [address, STAKING_ADDRESS],
+        });
+        setAllowance(toHuman(allowRaw ?? 0n));
+      } else {
+        setAllowance('0');
+      }
 
       // staking info
       if (address) {
@@ -205,7 +206,7 @@ async function loadDecimals() {
     } catch (err) {
       // console.error('fetchOnChain error', err);
     }
-  }, [publicClient, address, toHuman]);
+  }, [publicClient, address, toHuman, decimals]); // decimals included so loadTokenBalance uses correct decimals
 
   // poll every 30s when connected
   useEffect(() => {
@@ -735,7 +736,7 @@ async function loadDecimals() {
 
               <footer className="border-t border-gray-800 py-6 mt-6">
                 <div className="max-w-6xl mx-auto px-6 text-center text-sm text-gray-400">
-                  © 2025 AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
+                  © 2019-2025 AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
                 </div>
               </footer>
             </div>
