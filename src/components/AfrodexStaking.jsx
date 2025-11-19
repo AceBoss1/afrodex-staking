@@ -1,259 +1,222 @@
-// Updated full AfrodexStaking.jsx
-// Clean, complete, fully working
-// Uses ViewStakeInfoOf for all staking data
-// Auto-claims rewards on stake/unstake (no approve, no claim button)
-// Includes Token Analytics + Links + Badge Tiers + MAX buttons + Token Logo
-// Decimals fixed at 4 for AfroX
-// Token + Staking contract: 0x08130635368AA28b217a4dfb68E1bF8dC525621C
+'use client';
 
-import { useEffect, useState } from "react";
-import { ethers } from "ethers";
-import stakingAbi from "../abi/staking.json";
-import tokenAbi from "../abi/token.json";
-import Image from "next/image";
+import React, { useEffect, useState } from 'react';
+import { formatUnits, parseUnits } from 'viem';
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 
-const CONTRACT = "0x08130635368AA28b217a4dfb68E1bF8dC525621C";
-const TOKEN_LOGO = "/afrodex_token.png";
-const DECIMALS = 4;
+import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
+import { STAKING_ABI } from '../lib/abis/stakingAbi';
 
-const rewardRate = 0.006; // 0.60%
-const bonusRate = 0.0006; // 0.06% extra after 30 days
+export default function AfrodexStaking() {
+  const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
 
-export default function AfrodexStaking({ provider, signer, address }) {
-  const [loading, setLoading] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [walletBal, setWalletBal] = useState("0");
-  const [stakeInfo, setStakeInfo] = useState(null);
-  const [tokenStats, setTokenStats] = useState(null);
-  const [stakeAmount, setStakeAmount] = useState("");
-  const [unstakeAmount, setUnstakeAmount] = useState("");
+  const [tokenBalance, setTokenBalance] = useState('0');
+  const [stakeBalance, setStakeBalance] = useState('0');
+  const [rewardValue, setRewardValue] = useState('0');
+  const [lastUnstake, setLastUnstake] = useState(0);
+  const [lastReward, setLastReward] = useState(0);
+  const [amount, setAmount] = useState('');
+  const [pending, setPending] = useState(false);
+  const [decimals, setDecimals] = useState(4);
 
-  const staking = signer ? new ethers.Contract(CONTRACT, stakingAbi, signer) : null;
-  const token = signer ? new ethers.Contract(CONTRACT, tokenAbi, signer) : null;
-
-  async function loadPublicData() {
+  const fmt = (v) => {
+    if (!v) return '0';
     try {
-      const maxSupply = await token.maximumSupply();
-      const totalSupply = await token.totalSupply();
-      const minted = await staking.totalStakeRewardMinted();
-      const unminted = maxSupply - totalSupply;
+      return Number(formatUnits(BigInt(v), decimals)).toLocaleString();
+    } catch {
+      return '0';
+    }
+  };
 
-      setTokenStats({
-        maxSupply: Number(ethers.formatUnits(maxSupply, DECIMALS)).toLocaleString(),
-        totalSupply: Number(ethers.formatUnits(totalSupply, DECIMALS)).toLocaleString(),
-        minted: Number(ethers.formatUnits(minted, DECIMALS)).toLocaleString(),
-        unminted: Number(ethers.formatUnits(unminted, DECIMALS)).toLocaleString(),
-      });
-    } catch (e) {
-      console.error("Public data error:", e);
+  const toWei = (v) => parseUnits(v || '0', decimals);
+
+  async function loadTokenBalance() {
+    if (!publicClient || !address) return;
+    const bal = await readContractSafe(publicClient, {
+      address: TOKEN_ADDRESS,
+      abi: STAKING_ABI,
+      functionName: 'balanceOf',
+      args: [address],
+    });
+    if (bal !== null) setTokenBalance(bal.toString());
+  }
+
+  async function loadStakeInfo() {
+    if (!publicClient || !address) return;
+    const info = await readContractSafe(publicClient, {
+      address: STAKING_ADDRESS,
+      abi: STAKING_ABI,
+      functionName: 'viewStakeInfoOf',
+      args: [address],
+    });
+    if (info) {
+      setStakeBalance(info[0].toString());
+      setRewardValue(info[1].toString());
+      setLastUnstake(Number(info[2]));
+      setLastReward(Number(info[3]));
     }
   }
 
-  async function loadUserData() {
-    if (!address) return;
+  async function loadDecimals() {
+    const d = await readContractSafe(publicClient, {
+      address: TOKEN_ADDRESS,
+      abi: STAKING_ABI,
+      functionName: 'decimals',
+      args: [],
+    });
+    if (d !== null) setDecimals(Number(d));
+  }
+
+  async function stake() {
+    if (!walletClient || !amount) return alert('Enter amount');
     try {
-      const bal = await token.balanceOf(address);
-      setWalletBal(Number(ethers.formatUnits(bal, DECIMALS)).toLocaleString());
-
-      const info = await staking.viewStakeInfoOf(address);
-      setStakeInfo({
-        stakeBalance: Number(ethers.formatUnits(info.stakeBalance, DECIMALS)),
-        rewardValue: Number(ethers.formatUnits(info.rewardValue, DECIMALS)),
-        lastUnstakeTimestamp: Number(info.lastUnstakeTimestamp),
-        lastRewardTimestamp: Number(info.lastRewardTimestamp),
+      setPending(true);
+      await writeContractSafe(walletClient, {
+        address: STAKING_ADDRESS,
+        abi: STAKING_ABI,
+        functionName: 'stake',
+        args: [toWei(amount)],
       });
+      alert('Stake successful');
+      loadStakeInfo();
+      loadTokenBalance();
+    } catch (err) {
+      alert('Stake failed: ' + err.message);
+    } finally {
+      setPending(false);
+    }
+  }
 
-      setIsConnected(true);
-    } catch (e) {
-      console.error("User data error:", e);
+  async function unstake() {
+    if (!walletClient || !amount) return alert('Enter amount');
+    try {
+      setPending(true);
+      await writeContractSafe(walletClient, {
+        address: STAKING_ADDRESS,
+        abi: STAKING_ABI,
+        functionName: 'unstake',
+        args: [toWei(amount)],
+      });
+      alert('Unstake successful');
+      loadStakeInfo();
+      loadTokenBalance();
+    } catch (err) {
+      alert('Unstake failed: ' + err.message);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function claim() {
+    if (!walletClient) return;
+    try {
+      setPending(true);
+      await writeContractSafe(walletClient, {
+        address: STAKING_ADDRESS,
+        abi: STAKING_ABI,
+        functionName: 'stake',
+        args: [0n],
+      });
+      alert('Claim successful');
+      loadStakeInfo();
+      loadTokenBalance();
+    } catch (err) {
+      alert('Claim failed: ' + err.message);
+    } finally {
+      setPending(false);
     }
   }
 
   useEffect(() => {
-    loadPublicData(); // load even without wallet
-  }, []);
+    if (!isConnected) return;
+    loadDecimals();
+    loadTokenBalance();
+    loadStakeInfo();
+  }, [isConnected, address]);
 
   useEffect(() => {
-    if (provider && address) loadUserData();
-  }, [provider, address]);
+    if (!isConnected) return;
+    const t = setInterval(() => {
+      loadStakeInfo();
+      loadTokenBalance();
+    }, 20000);
+    return () => clearInterval(t);
+  }, [isConnected]);
 
-  async function doStake() {
-    if (!stakeAmount) return;
-    setLoading(true);
-
-    try {
-      const amt = ethers.parseUnits(stakeAmount, DECIMALS);
-      const tx = await staking.stake(amt);
-      await tx.wait();
-      await loadUserData();
-    } catch (e) {
-      console.error(e);
-    }
-    setLoading(false);
-  }
-
-  async function doUnstake() {
-    if (!unstakeAmount) return;
-    setLoading(true);
-
-    try {
-      const amt = ethers.parseUnits(unstakeAmount, DECIMALS);
-      const tx = await staking.unstake(amt);
-      await tx.wait();
-      await loadUserData();
-    } catch (e) {
-      console.error(e);
-    }
-    setLoading(false);
-  }
-
-  function badgeTier(amount) {
-    if (amount >= 10000000000000) return "❇️ Diamond Custodian";
-    if (amount >= 1000000000000) return "💠 Platinum Sentinel";
-    if (amount >= 500000000000) return "〽️ Marshal";
-    if (amount >= 100000000000) return "✳️ General";
-    if (amount >= 50000000000) return "⚜️ Commander";
-    if (amount >= 10000000000) return "🔱 Captain";
-    if (amount >= 1000000000) return "🔰 Cadet";
-    return "Starter";
-  }
+  if (!isConnected)
+    return (
+      <div className="text-center text-gray-300 py-10">
+        Connect your wallet to view staking dashboard.
+      </div>
+    );
 
   return (
-    <div className="p-6 text-white space-y-8">
-      <h1 className="text-3xl font-bold text-center mb-2">AfroX Staking & Minting Engine</h1>
+    <div className="max-w-4xl mx-auto px-4 pb-20">
+      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-8">
+        <h2 className="text-xl text-orange-400 font-semibold">Connected Wallet</h2>
+        <p className="text-gray-300 mt-2 break-all">{address}</p>
+      </div>
 
-      {/* Connection Status */}
-      <p className="text-right text-sm text-gray-400">
-        Connected: {isConnected ? `🔐 ${address.slice(0, 4)}...${address.slice(-4)}` : "🔓 Not connected"}
-      </p>
-
-      {/* Wallet + Stake Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Wallet Balance */}
-        <div className="bg-gray-900 rounded-xl p-4">
-          <h2 className="text-lg font-semibold">Wallet Balance</h2>
-          <div className="flex items-center mt-2 text-2xl">
-            <Image src={TOKEN_LOGO} width={26} height={26} alt="token" className="mr-2" />
-            {walletBal} AfroX
-          </div>
-          <p className="text-gray-500 text-xs mt-1">Available in your wallet</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+          <h3 className="text-lg text-gray-300">Wallet Balance</h3>
+          <p className="text-3xl text-white mt-2">{fmt(tokenBalance)} AfroX</p>
         </div>
 
-        {/* Staked Balance */}
-        <div className="bg-gray-900 rounded-xl p-4">
-          <h2 className="text-lg font-semibold">Staked Balance</h2>
-          <div className="flex items-center mt-2 text-2xl">
-            <Image src={TOKEN_LOGO} width={26} height={26} alt="token" className="mr-2" />
-            {stakeInfo?.stakeBalance?.toLocaleString() || 0} AfroX
-          </div>
-          <p className="text-gray-500 text-xs mt-1">
-            Last unstake: {stakeInfo?.lastUnstakeTimestamp ? new Date(stakeInfo.lastUnstakeTimestamp * 1000).toLocaleString() : "—"}
-          </p>
-        </div>
-
-        {/* Rewards */}
-        <div className="bg-gray-900 rounded-xl p-4">
-          <h2 className="text-lg font-semibold">Accumulated Rewards</h2>
-          <div className="flex items-center mt-2 text-2xl text-green-400">
-            <Image src={TOKEN_LOGO} width={26} height={26} alt="token" className="mr-2" />
-            {stakeInfo?.rewardValue?.toLocaleString() || 0} AfroX
-          </div>
-          <p className="text-gray-500 text-xs mt-1">
-            Last reward update: {stakeInfo?.lastRewardTimestamp ? new Date(stakeInfo.lastRewardTimestamp * 1000).toLocaleString() : "—"}
-          </p>
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+          <h3 className="text-lg text-gray-300">Staked Balance</h3>
+          <p className="text-3xl text-white mt-2">{fmt(stakeBalance)} AfroX</p>
         </div>
       </div>
 
-      {/* Badge Tier */}
-      <div className="bg-gray-900 p-4 rounded-xl">
-        <h2 className="text-lg font-semibold mb-1">Badge Tier</h2>
-        <p className="text-xl font-bold">
-          {badgeTier(stakeInfo?.stakeBalance || 0)}
-        </p>
-        <p className="text-xs text-gray-400 mt-1">{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "—"}</p>
+      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 mb-8">
+        <h3 className="text-lg text-gray-300">Accumulated Rewards</h3>
+        <p className="text-3xl text-green-400 mt-2">{fmt(rewardValue)} AfroX</p>
 
-        <p className="text-gray-400 text-sm mt-2">
-          Tier thresholds: 🔰Cadet 1b, 🔱Captain 10b, ⚜️Commander 50b, ✳️General 100b, 〽️Marshal 500b,<br /> 💠 Platinum 1t, ❇️ Diamond 10t
-        </p>
-      </div>
-
-      {/* Stake + Unstake */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Stake */}
-        <div className="bg-gray-900 p-4 rounded-xl">
-          <h2 className="text-lg font-semibold mb-3">Stake AfroX</h2>
-          <div className="flex items-center mb-3">
-            <input
-              value={stakeAmount}
-              onChange={(e) => setStakeAmount(e.target.value)}
-              placeholder="Amount"
-              className="flex-1 p-2 rounded bg-black border border-gray-700"
-            />
-            <button
-              onClick={() => setStakeAmount(walletBal.replace(/,/g, ""))}
-              className="ml-2 px-3 py-2 bg-gray-700 rounded"
-            >
-              MAX
-            </button>
-          </div>
-          <button className="w-full p-3 bg-orange-500 rounded-lg" onClick={doStake} disabled={loading}>
-            Stake (auto-claims)
-          </button>
+        <div className="text-gray-400 text-sm mt-4">
+          <p>Last Reward Timestamp: {lastReward || '—'}</p>
+          <p>Last Unstake Timestamp: {lastUnstake || '—'}</p>
         </div>
 
-        {/* Unstake */}
-        <div className="bg-gray-900 p-4 rounded-xl">
-          <h2 className="text-lg font-semibold mb-3">Unstake AfroX</h2>
-          <div className="flex items-center mb-3">
-            <input
-              value={unstakeAmount}
-              onChange={(e) => setUnstakeAmount(e.target.value)}
-              placeholder="Amount"
-              className="flex-1 p-2 rounded bg-black border border-gray-700"
-            />
-            <button
-              onClick={() => setUnstakeAmount(stakeInfo?.stakeBalance || 0)}
-              className="ml-2 px-3 py-2 bg-gray-700 rounded"
-            >
-              MAX
-            </button>
-          </div>
-          <button className="w-full p-3 bg-orange-500 rounded-lg" onClick={doUnstake} disabled={loading}>
-            Unstake (auto-claims)
+        <button
+          onClick={claim}
+          disabled={pending}
+          className="mt-5 w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg"
+        >
+          {pending ? 'Processing...' : 'Claim Rewards'}
+        </button>
+      </div>
+
+      <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+        <h3 className="text-lg text-gray-300 mb-3">Stake / Unstake</h3>
+
+        <input
+          type="number"
+          placeholder="Amount"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-full p-3 rounded bg-gray-900 border border-gray-700 text-white mb-4"
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <button
+            onClick={stake}
+            disabled={pending}
+            className="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg"
+          >
+            Stake
           </button>
 
-          <p className="text-xs text-gray-400 mt-3">
-            To manually claim rewards, stake or unstake a tiny amount (e.g. 0.0001 AfroX).
-          </p>
+          <button
+            onClick={unstake}
+            disabled={pending}
+            className="bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg"
+          >
+            Unstake
+          </button>
         </div>
-      </div>
-
-      {/* Token Analytics */}
-      <div className="bg-gray-900 p-4 rounded-xl">
-        <h2 className="text-lg font-semibold mb-3">Token Analytics</h2>
-
-        {tokenStats ? (
-          <div className="space-y-2 text-gray-300">
-            <p><strong>Maximum Supply:</strong> {tokenStats.maxSupply}</p>
-            <p><strong>Current Total Supply:</strong> {tokenStats.totalSupply}</p>
-            <p><strong>Total Stake Reward Minted:</strong> {tokenStats.minted}</p>
-            <p><strong>Un-minted AfroX:</strong> {tokenStats.unminted}</p>
-
-            <div className="mt-4 space-x-4">
-              <a href="https://etherscan.io/token/0x08130635368AA28b217a4dfb68E1bF8dC525621C" target="_blank" className="text-blue-400 underline">Etherscan</a>
-              <a href="https://coinmarketcap.com/currencies/afrodex" target="_blank" className="text-blue-400 underline">CoinMarketCap</a>
-            </div>
-          </div>
-        ) : (
-          <p className="text-gray-500">Loading token analytics...</p>
-        )}
-      </div>
-
-      {/* Debug */}
-      <div className="bg-gray-900 p-4 rounded-xl text-sm text-gray-400">
-        <p><strong>Connected:</strong> {isConnected ? "Yes" : "No"}</p>
-        <p><strong>Wallet:</strong> {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "—"}</p>
-        <p><strong>Token decimals:</strong> 4</p>
       </div>
     </div>
   );
