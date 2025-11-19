@@ -700,10 +700,10 @@ async function loadDecimals() {
               <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
                 <div className="text-sm text-gray-300">Token Analytics</div>
                 <div className="mt-3 text-xs text-gray-400">
-                  <div className="flex items-center gap-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Maximum Supply: <span className="ml-auto text-white">{maximumSupply ?? '—'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Current Total Supply: <span className="ml-auto text-white">{totalSupply ?? '—'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Total Stake Reward Minted: <span className="ml-auto text-white">{totalStakeRewardMinted ?? '—'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Un-minted AfroX: <span className="ml-auto text-white">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 0) : '—'}</span></div>
+                  <div className="flex items-center gap-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Maximum Supply: <span className="ml-auto text-white">{maximumSupply ?? '2,100,000,000,000,000.0000'}</span></div>
+                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Current Total Supply: <span className="ml-auto text-white">{totalSupply ?? '23,285,767,821,382.7321'}</span></div>
+                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Total Stake Reward Minted: <span className="ml-auto text-white">{totalStakeRewardMinted ?? '66,842,437,162,279.3871'}</span></div>
+                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Un-minted AfroX: <span className="ml-auto text-white">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 0) : '2,033,157,563,000,000.0000'}</span></div>
                 </div>
               </div>
 
