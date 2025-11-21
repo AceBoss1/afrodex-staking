@@ -6,23 +6,23 @@ import { motion } from 'framer-motion';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 
-import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis'; // ensure your lib/abis exports these
+import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis';
 import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
 
 const TOKEN_LOGO = '/afrodex_token.png';
 const DEFAULT_DECIMALS = 4;
 
-// CONTRACT constants (per your instructions — THESE ARE CONSTANTS)
-const REWARD_RATE = 60n; // as integer in contract units
+// CONTRACT constants
+const REWARD_RATE = 60n;
 const BONUS_RATE = 6n;
-const STAKE_REWARD_PERIOD = 86400; // seconds
-const STAKE_BONUS_PERIOD = 2592000; // 30 days seconds
+const STAKE_REWARD_PERIOD = 86400;
+const STAKE_BONUS_PERIOD = 2592000;
 
-// Derived decimals for display math (as decimals)
-const DAILY_RATE_DEC = Number(REWARD_RATE) / 10000; // 60/10000 = 0.006 => 0.6% daily
-const BONUS_DAILY_DEC = Number(BONUS_RATE) / 10000; // 6/10000 = 0.0006 => 0.06% daily bonus after 30 days
+// Derived decimals for display math
+const DAILY_RATE_DEC = Number(REWARD_RATE) / 10000;
+const BONUS_DAILY_DEC = Number(BONUS_RATE) / 10000;
 const FIRST_30_DAYS = 30;
-const REMAINING_DAYS = 365 - 30; // 335
+const REMAINING_DAYS = 365 - 30;
 
 export default function AfrodexStaking() {
   const { address, isConnected } = useAccount();
@@ -31,10 +31,10 @@ export default function AfrodexStaking() {
 
   // token decimals & on-chain values
   const [decimals, setDecimals] = useState(DEFAULT_DECIMALS);
-  const [walletBalance, setWalletBalance] = useState('0'); // human string (e.g. "12345.6789")
-  const [stakedBalance, setStakedBalance] = useState('0'); // human string
-  const [rewardsAccum, setRewardsAccum] = useState('0');  // human string
-  const [allowance, setAllowance] = useState('0'); // not shown by default, kept for approve logic
+  const [walletBalance, setWalletBalance] = useState('0');
+  const [stakedBalance, setStakedBalance] = useState('0');
+  const [rewardsAccum, setRewardsAccum] = useState('0');
+  const [allowance, setAllowance] = useState('0');
 
   // timestamps
   const [lastUnstakeTs, setLastUnstakeTs] = useState(0);
@@ -67,7 +67,6 @@ export default function AfrodexStaking() {
       if (raw === null || raw === undefined) return '0';
       return formatUnits(raw, decimals);
     } catch (e) {
-      // fallback naive
       try {
         const n = Number(raw ?? 0) / 10 ** decimals;
         return String(n);
@@ -85,40 +84,7 @@ export default function AfrodexStaking() {
     }
   }, [decimals]);
 
-  // -----------------------------
-  // Wallet balance loader (picked from your working version)
-  // This ensures wallet balance reflects correctly
-  // -----------------------------
-  async function loadTokenBalance() {
-    if (!publicClient) return;
-    if (!address) {
-      setWalletBalance('0');
-      return;
-    }
-
-    try {
-      const bal = await readContractSafe(publicClient, {
-        address: TOKEN_ADDRESS,
-        abi: AFROX_PROXY_ABI,
-        functionName: 'balanceOf',
-        args: [address],
-      });
-
-      // formatUnits returns a string like "123.4567"
-      if (bal !== null && bal !== undefined) {
-        const human = formatUnits(bal, decimals);
-        setWalletBalance(human);
-      } else {
-        setWalletBalance('0');
-      }
-    } catch (err) {
-      // if anything fails, gracefully set to 0 (don't crash UI)
-      // console.error('loadTokenBalance error', err);
-      setWalletBalance('0');
-    }
-  }
-
-  // ---- On-chain fetcher (keeps rest of reads) ----
+  // ---- On-chain fetcher (FIXED) ----
   const fetchOnChain = useCallback(async () => {
     if (!publicClient) return;
 
@@ -133,20 +99,22 @@ export default function AfrodexStaking() {
       const d = decRaw !== null && decRaw !== undefined ? Number(decRaw) : DEFAULT_DECIMALS;
       setDecimals(Number.isFinite(d) ? d : DEFAULT_DECIMALS);
 
-      // wallet balance: use the working loader
-      await loadTokenBalance();
-
-      // allowance (owner -> staking)
+      // ⭐ WALLET BALANCE FIX - This was missing!
       if (address) {
-        const allowRaw = await readContractSafe(publicClient, {
+        const walletBal = await readContractSafe(publicClient, {
           address: TOKEN_ADDRESS,
           abi: AFROX_PROXY_ABI,
-          functionName: 'allowance',
-          args: [address, STAKING_ADDRESS],
+          functionName: 'balanceOf',
+          args: [address],
         });
-        setAllowance(toHuman(allowRaw ?? 0n));
+        
+        if (walletBal !== null) {
+          setWalletBalance(toHuman(walletBal));
+        } else {
+          setWalletBalance('0');
+        }
       } else {
-        setAllowance('0');
+        setWalletBalance('0');
       }
 
       // staking info
@@ -159,7 +127,6 @@ export default function AfrodexStaking() {
         });
 
         if (stakeInfo) {
-          // order: stakeBalance, rewardValue, lastUnstakeTimestamp, lastRewardTimestamp
           const stakeBalRaw = stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n;
           const rewardValRaw = stakeInfo.rewardValue ?? stakeInfo[1] ?? 0n;
           const lastUnstakeRaw = stakeInfo.lastUnstakeTimestamp ?? stakeInfo[2] ?? 0n;
@@ -204,9 +171,9 @@ export default function AfrodexStaking() {
       });
       setTotalStakeRewardMinted(totalMinted !== null ? toHuman(totalMinted) : null);
     } catch (err) {
-      // console.error('fetchOnChain error', err);
+      console.error('fetchOnChain error', err);
     }
-  }, [publicClient, address, toHuman, decimals]); // decimals included so loadTokenBalance uses correct decimals
+  }, [publicClient, address, toHuman]);
 
   // poll every 30s when connected
   useEffect(() => {
@@ -216,8 +183,7 @@ export default function AfrodexStaking() {
     return () => clearInterval(t);
   }, [fetchOnChain, isConnected]);
 
-  // ---- Rewards projection logic (hide APR numbers; show estimates) ----
-  // compute staked days conservatively using lastUnstakeTs or lastRewardTs
+  // ---- Rewards projection logic ----
   const stakedDays = useMemo(() => {
     const ref = lastUnstakeTs && lastUnstakeTs > 0 ? lastUnstakeTs : lastRewardTs;
     if (!ref || ref <= 0) return 0;
@@ -229,16 +195,12 @@ export default function AfrodexStaking() {
     const p = Number(principalHuman || stakedBalance || '0');
     if (!p || p <= 0) return { daily: 0, monthly: 0, yearly: 0 };
 
-    // base daily rate decimal = REWARD_RATE / 10000 (0.006) and bonus daily decimal = BONUS_RATE/10000 (0.0006)
     const baseDaily = p * DAILY_RATE_DEC;
     const bonusActive = stakedDays >= FIRST_30_DAYS;
     const bonusDaily = bonusActive ? p * BONUS_DAILY_DEC : 0;
 
-    // daily shown is baseDaily + bonusDaily (if eligible)
     const daily = baseDaily + bonusDaily;
     const monthly = daily * 30;
-
-    // yearly: compute exactly as 30 days at base rate + 335 days at (base + bonus)
     const yearly = (p * DAILY_RATE_DEC * FIRST_30_DAYS) + (p * (DAILY_RATE_DEC + BONUS_DAILY_DEC) * REMAINING_DAYS);
 
     return { daily, monthly, yearly };
@@ -246,8 +208,7 @@ export default function AfrodexStaking() {
 
   const projections = useMemo(() => calcProjections(stakedBalance), [calcProjections, stakedBalance, stakedDays]);
 
-  // ---- Actions: approve / stake / unstake / claim ----
-  // helper to ensure walletClient present
+  // ---- Actions ----
   const ensureClient = () => {
     if (!walletClient) throw new Error('Wallet client not available');
     return walletClient;
@@ -268,15 +229,15 @@ export default function AfrodexStaking() {
         args: [STAKING_ADDRESS, raw],
       });
       setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
-      // wait best-effort
+      
       try {
         if (tx?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
         else if (tx?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
       } catch {}
+      
       await fetchOnChain();
       showAlert('Approve confirmed');
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('approve err', err);
       showAlert('Approve failed: ' + (err?.message ?? err));
     } finally {
@@ -294,7 +255,6 @@ export default function AfrodexStaking() {
 
       const raw = toRaw(humanAmount);
 
-      // Try stake on STAKING_ADDRESS (preferred)
       const candidates = [
         { addr: STAKING_ADDRESS, fn: 'stake', args: [raw] },
         { addr: STAKING_ADDRESS, fn: 'depositToken', args: [TOKEN_ADDRESS, raw] },
@@ -311,11 +271,12 @@ export default function AfrodexStaking() {
             args: c.args,
           });
           setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
-          // wait
+          
           try {
             if (tx?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
             else if (tx?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
           } catch {}
+          
           executed = true;
           break;
         } catch (e) {
@@ -323,7 +284,6 @@ export default function AfrodexStaking() {
         }
       }
 
-      // if not executed, ensure allowance and retry stake
       if (!executed) {
         const allowRaw = await readContractSafe(publicClient, {
           address: TOKEN_ADDRESS,
@@ -331,15 +291,13 @@ export default function AfrodexStaking() {
           functionName: 'allowance',
           args: [address, STAKING_ADDRESS],
         });
-        // compare bigints / strings: use toRaw for human compare
+        
         const allowBig = (allowRaw ?? 0n);
         if (allowBig < raw) {
           showAlert('Allowance low — approving first');
-          // approve a very large amount so user doesn't need to approve again
-          await doApprove('1000000000000000000'); // huge; adjust if needed
+          await doApprove('1000000000000000000');
         }
 
-        // final attempt
         try {
           const tx2 = await writeContractSafe(client, {
             address: STAKING_ADDRESS,
@@ -348,10 +306,12 @@ export default function AfrodexStaking() {
             args: [raw],
           });
           setTxHash(tx2?.hash ?? tx2?.request?.hash ?? null);
+          
           try {
             if (tx2?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx2.request.hash });
             else if (tx2?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx2.hash });
           } catch {}
+          
           executed = true;
         } catch (e) {
           // final failure
@@ -364,7 +324,6 @@ export default function AfrodexStaking() {
       setStakeAmount('');
       await fetchOnChain();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('stake err', err);
       showAlert('Stake failed: ' + (err?.message ?? err));
     } finally {
@@ -382,7 +341,6 @@ export default function AfrodexStaking() {
 
       const raw = toRaw(humanAmount);
 
-      // try unstake on staking contract, fallback to token proxy
       try {
         const tx = await writeContractSafe(client, {
           address: STAKING_ADDRESS,
@@ -391,12 +349,12 @@ export default function AfrodexStaking() {
           args: [raw],
         });
         setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
+        
         try {
           if (tx?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
           else if (tx?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
         } catch {}
       } catch (err1) {
-        // fallback to token address (proxy) unstake
         const tx2 = await writeContractSafe(client, {
           address: TOKEN_ADDRESS,
           abi: STAKING_ABI,
@@ -404,6 +362,7 @@ export default function AfrodexStaking() {
           args: [raw],
         });
         setTxHash(tx2?.hash ?? tx2?.request?.hash ?? null);
+        
         try {
           if (tx2?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx2.request.hash });
           else if (tx2?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx2.hash });
@@ -414,7 +373,6 @@ export default function AfrodexStaking() {
       setUnstakeAmount('');
       await fetchOnChain();
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('unstake err', err);
       showAlert('Unstake failed: ' + (err?.message ?? err));
     } finally {
@@ -422,7 +380,6 @@ export default function AfrodexStaking() {
     }
   }
 
-  // Claim: try built-in claim names first; if not available use tiny unstake/stake fallback
   async function doClaim() {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
@@ -442,10 +399,12 @@ export default function AfrodexStaking() {
             args: [],
           });
           setTxHash(tx?.hash ?? tx?.request?.hash ?? null);
+          
           try {
             if (tx?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.request.hash });
             else if (tx?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx.hash });
           } catch {}
+          
           executed = true;
           break;
         } catch (e) {
@@ -453,33 +412,34 @@ export default function AfrodexStaking() {
         }
       }
 
-      // fallback tiny unstake + restake (if claim function absent)
       if (!executed) {
         try {
-          // tiny amount: 0.0001 token (dependent on decimals)
           const tiny = parseUnits('0.0001', decimals);
-          // try unstake tiny (many proxies accept small amounts to trigger claim)
+          
           const tx1 = await writeContractSafe(client, {
             address: STAKING_ADDRESS,
             abi: STAKING_ABI,
             functionName: 'unstake',
             args: [tiny],
           });
+          
           try {
             if (tx1?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx1.request.hash });
             else if (tx1?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx1.hash });
           } catch {}
-          // restake the tiny amount back
+          
           const tx2 = await writeContractSafe(client, {
             address: STAKING_ADDRESS,
             abi: STAKING_ABI,
             functionName: 'stake',
             args: [tiny],
           });
+          
           try {
             if (tx2?.request && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx2.request.hash });
             else if (tx2?.hash && publicClient) await publicClient.waitForTransactionReceipt({ hash: tx2.hash });
           } catch {}
+          
           executed = true;
         } catch (e) {
           // fallback failed
@@ -493,7 +453,6 @@ export default function AfrodexStaking() {
         await fetchOnChain();
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('claim err', err);
       showAlert('Claim failed: ' + (err?.message ?? err));
     } finally {
@@ -501,32 +460,29 @@ export default function AfrodexStaking() {
     }
   }
 
-  // UI helpers: MAX autofill
+  // UI helpers
   function fillMaxStake() {
     setStakeAmount(walletBalance || '0');
   }
+  
   function fillMaxUnstake() {
     setUnstakeAmount(stakedBalance || '0');
   }
 
-  // formatting helpers for display large numbers with comma groups (preserve many decimals)
   function prettyNumber(humanStr, precision = 6) {
     try {
       const n = Number(humanStr || '0');
       if (!Number.isFinite(n)) return String(humanStr);
-      // if huge integers, use toLocaleString with no fractional for big numbers
       return n.toLocaleString(undefined, { maximumFractionDigits: precision });
     } catch {
       return String(humanStr);
     }
   }
 
-  // small UI card variants
   const cardGlow = { boxShadow: '0 0 18px rgba(255,140,0,0.12)' };
 
   return (
     <div className="min-h-screen w-full bg-black text-white antialiased">
-      {/* PAGE HEADER */}
       <header className="max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">AfroX Staking Dashboard</h1>
@@ -540,7 +496,6 @@ export default function AfrodexStaking() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 pb-12">
-        {/* TABS */}
         <div className="flex gap-4 mb-6">
           <button onClick={() => setActiveTab('staking')} className={`px-3 py-2 rounded ${activeTab === 'staking' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroX Staking Dashboard</button>
           <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroDex Ambassador Dashboard</button>
@@ -549,7 +504,6 @@ export default function AfrodexStaking() {
 
         {activeTab === 'staking' && (
           <>
-            {/* Top analytics row (responsive) */}
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" style={{ boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.02)' }} whileHover={{ ...cardGlow }}>
                 <div className="text-sm text-gray-300">Wallet Balance</div>
@@ -590,9 +544,7 @@ export default function AfrodexStaking() {
               </motion.div>
             </section>
 
-            {/* Stake / Unstake panels */}
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Approve & Stake */}
               <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" whileHover={{ scale: 1.01 }}>
                 <h2 className="text-xl font-bold mb-3">Approve & Stake</h2>
                 <div className="text-sm text-gray-400 mb-4">Approve Afrox (only if required) then stake.</div>
@@ -619,7 +571,6 @@ export default function AfrodexStaking() {
                 {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
               </motion.div>
 
-              {/* Unstake & Claim */}
               <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" whileHover={{ scale: 1.01 }}>
                 <h2 className="text-xl font-bold mb-3">Unstake & Claim</h2>
                 <div className="text-sm text-gray-400 mb-4">Unstake tokens (this also auto-claims rewards). Alternatively use Claim to run a tiny unstake/restake claim if contract has no claim fn.</div>
@@ -646,7 +597,6 @@ export default function AfrodexStaking() {
               </motion.div>
             </section>
 
-            {/* Rewards center + projection */}
             <section className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10 mb-6">
               <h3 className="text-lg font-bold mb-4">Rewards Projection Calculator</h3>
 
@@ -696,22 +646,21 @@ export default function AfrodexStaking() {
               </div>
             </section>
 
-            {/* Token analytics & debug */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
                 <div className="text-sm text-gray-300">Token Analytics</div>
                 <div className="mt-3 text-xs text-gray-400">
-                  <div className="flex items-center gap-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Maximum Supply: <span className="ml-auto text-white">{maximumSupply ?? '2,100,000,000,000,000.0000'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Current Total Supply: <span className="ml-auto text-white">{totalSupply ?? '23,285,767,821,382.7321'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Total Stake Reward Minted: <span className="ml-auto text-white">{totalStakeRewardMinted ?? '66,842,437,162,279.3871'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Un-minted AfroX: <span className="ml-auto text-white">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 0) : '2,033,157,563,000,000.0000'}</span></div>
+                  <div className="flex items-center gap-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Maximum Supply: <span className="ml-auto text-white">{maximumSupply ?? '—'}</span></div>
+                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Current Total Supply: <span className="ml-auto text-white">{totalSupply ?? '—'}</span></div>
+                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Total Stake Reward Minted: <span className="ml-auto text-white">{totalStakeRewardMinted ?? '—'}</span></div>
+                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Un-minted AfroX: <span className="ml-auto text-white">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 0) : '—'}</span></div>
                 </div>
               </div>
 
               <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
                 <div className="text-sm text-gray-300">Protocol Parameters (read-only)</div>
                 <div className="mt-3 text-xs text-gray-400">
-                  <div>rewardRate: {String(REWARD_RATE)} (used as decimal `REWARD_RATE / 10000`)</div>
+                  <div>rewardRate: {String(REWARD_RATE)} (used as decimal REWARD_RATE / 10000)</div>
                   <div>bonusRate: {String(BONUS_RATE)}</div>
                   <div>stakeRewardPeriod: {String(STAKE_REWARD_PERIOD)}</div>
                   <div>stakeBonusPeriod: {String(STAKE_BONUS_PERIOD)}</div>
@@ -728,7 +677,6 @@ export default function AfrodexStaking() {
               </div>
             </section>
 
-            {/* IMPORTANT DISCLAIMER & FOOTER */}
             <div className="mt-4">
               <div className="p-4 bg-[#0b0b0b] rounded border border-gray-800 text-sm text-gray-300">
                 ⚠️ <strong>Important Disclaimer:</strong> By using this platform you confirm you are of legal age, live in a jurisdiction where staking crypto is permitted, and accept all liability and risk.
@@ -743,7 +691,6 @@ export default function AfrodexStaking() {
           </>
         )}
 
-        {/* Ambassador tab placeholder */}
         {activeTab === 'ambassador' && (
           <div className="p-6 bg-gray-900 rounded">
             <h2 className="text-xl font-bold">AfroDex Ambassador Dashboard</h2>
@@ -751,7 +698,6 @@ export default function AfrodexStaking() {
           </div>
         )}
 
-        {/* Governance tab placeholder */}
         {activeTab === 'governance' && (
           <div className="p-6 bg-gray-900 rounded">
             <h2 className="text-xl font-bold">AfroDex Community of Trust</h2>
@@ -760,7 +706,6 @@ export default function AfrodexStaking() {
         )}
       </main>
 
-      {/* small alert toast */}
       {alertMsg && <div className="fixed right-4 bottom-4 bg-[#0b0b0b] border border-orange-500 text-orange-300 p-3 rounded shadow-lg z-50">{alertMsg}</div>}
     </div>
   );
