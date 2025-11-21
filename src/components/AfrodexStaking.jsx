@@ -206,6 +206,21 @@ export default function AfrodexStaking() {
     return { daily, monthly, yearly };
   }, [stakedBalance, stakedDays]);
 
+  // Calculate badge tier based on staked amount
+  const getBadgeTier = useCallback(() => {
+    const staked = Number(stakedBalance || '0');
+    
+    if (staked >= 10e12) return { name: '❇️Diamond Custodian', emoji: '❇️', threshold: '≥10T AfroX' };
+    if (staked >= 1e12) return { name: '💠Platinum Sentinel', emoji: '💠', threshold: '≥1T AfroX' };
+    if (staked >= 500e9) return { name: '〽️Marshal', emoji: '〽️', threshold: '≥500B AfroX' };
+    if (staked >= 100e9) return { name: '✳️General', emoji: '✳️', threshold: '≥100B AfroX' };
+    if (staked >= 50e9) return { name: '⚜️Commander', emoji: '⚜️', threshold: '≥50B AfroX' };
+    if (staked >= 10e9) return { name: '🔱Captain', emoji: '🔱', threshold: '≥10B AfroX' };
+    if (staked >= 1e9) return { name: '🔰Cadet', emoji: '🔰', threshold: '≥1B AfroX' };
+    
+    return { name: 'Starter', emoji: '⭐', threshold: 'Stake to unlock' };
+  }, [stakedBalance]);
+
   const projections = useMemo(() => calcProjections(stakedBalance), [calcProjections, stakedBalance, stakedDays]);
 
   // ---- Actions ----
@@ -469,10 +484,26 @@ export default function AfrodexStaking() {
     setUnstakeAmount(stakedBalance || '0');
   }
 
-  function prettyNumber(humanStr, precision = 6) {
+  // Format large numbers with abbreviations (K, M, B, T, Q)
+  function prettyNumber(humanStr, precision = 2) {
     try {
       const n = Number(humanStr || '0');
       if (!Number.isFinite(n)) return String(humanStr);
+      
+      const absN = Math.abs(n);
+      
+      if (absN >= 1e15) { // Quadrillion
+        return (n / 1e15).toFixed(precision) + 'Q';
+      } else if (absN >= 1e12) { // Trillion
+        return (n / 1e12).toFixed(precision) + 'T';
+      } else if (absN >= 1e9) { // Billion
+        return (n / 1e9).toFixed(precision) + 'B';
+      } else if (absN >= 1e6) { // Million
+        return (n / 1e6).toFixed(precision) + 'M';
+      } else if (absN >= 1e3) { // Thousand
+        return (n / 1e3).toFixed(precision) + 'K';
+      }
+      
       return n.toLocaleString(undefined, { maximumFractionDigits: precision });
     } catch {
       return String(humanStr);
@@ -509,7 +540,7 @@ export default function AfrodexStaking() {
                 <div className="text-sm text-gray-300">Wallet Balance</div>
                 <div className="text-2xl font-bold flex items-center gap-2 mt-2">
                   <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
-                  <span>{prettyNumber(walletBalance, 6)} AfroX</span>
+                  <span>{prettyNumber(walletBalance, 2)} AfroX</span>
                 </div>
                 <div className="text-xs text-gray-400 mt-2">Available in your wallet</div>
               </motion.div>
@@ -518,7 +549,7 @@ export default function AfrodexStaking() {
                 <div className="text-sm text-gray-300">Staked Balance</div>
                 <div className="text-2xl font-bold flex items-center gap-2 mt-2">
                   <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
-                  <span>{prettyNumber(stakedBalance, 6)} AfroX</span>
+                  <span>{prettyNumber(stakedBalance, 2)} AfroX</span>
                 </div>
                 <div className="text-xs text-gray-400 mt-2">Last reward update: {lastRewardTs ? new Date(lastRewardTs * 1000).toLocaleString() : '—'}</div>
               </motion.div>
@@ -527,7 +558,7 @@ export default function AfrodexStaking() {
                 <div className="text-sm text-gray-300">Accumulated Rewards</div>
                 <div className="text-2xl font-bold flex items-center gap-2 mt-2">
                   <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
-                  <span className="text-green-300">{prettyNumber(rewardsAccum, 6)} AfroX</span>
+                  <span className="text-green-300">{prettyNumber(rewardsAccum, 2)} AfroX</span>
                 </div>
                 <div className="text-xs text-gray-400 mt-2">Last unstake: {lastUnstakeTs ? new Date(lastUnstakeTs * 1000).toLocaleString() : '—'}</div>
               </motion.div>
@@ -536,11 +567,20 @@ export default function AfrodexStaking() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm text-gray-300">Badge Tier</div>
-                    <div className="text-lg font-semibold text-orange-300">Starter</div>
+                    <div className="text-2xl font-semibold text-orange-300 flex items-center gap-2 mt-1">
+                      <span>{badgeTier.emoji}</span>
+                      <span>{badgeTier.name}</span>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-400">{address ? shortAddr(address) : 'Not connected'}</div>
                 </div>
-                <div className="mt-3 text-xs text-gray-400">Tier thresholds: Cadet 1b, Captain 10b, Commander 50b, General 100b, Marshal 500b</div>
+                <div className="mt-3 text-xs text-gray-400">
+                  <div className="font-semibold text-gray-300 mb-1">{badgeTier.threshold}</div>
+                  <div className="text-[10px] leading-relaxed">
+                    🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B<br/>
+                    ✳️General ≥100B | 〽️Marshal ≥500B<br/>
+                    💠Platinum ≥1T | ❇️Diamond ≥10T
+                  </div>
+                </div>
               </motion.div>
             </section>
 
@@ -609,7 +649,7 @@ export default function AfrodexStaking() {
                       <div className="text-xs text-gray-400">Daily Reward</div>
                       <div className="flex items-center gap-2 mt-2">
                         <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.daily, 6)} AfroX</div>
+                        <div className="text-xl font-bold">{prettyNumber(projections.daily, 2)} AfroX</div>
                       </div>
                     </div>
 
@@ -617,7 +657,7 @@ export default function AfrodexStaking() {
                       <div className="text-xs text-gray-400">Monthly Reward (30d)</div>
                       <div className="flex items-center gap-2 mt-2">
                         <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.monthly, 6)} AfroX</div>
+                        <div className="text-xl font-bold">{prettyNumber(projections.monthly, 2)} AfroX</div>
                       </div>
                     </div>
 
@@ -625,7 +665,7 @@ export default function AfrodexStaking() {
                       <div className="text-xs text-gray-400">Yearly Reward (365d)</div>
                       <div className="flex items-center gap-2 mt-2">
                         <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.yearly, 6)} AfroX</div>
+                        <div className="text-xl font-bold">{prettyNumber(projections.yearly, 2)} AfroX</div>
                       </div>
                     </div>
                   </div>
@@ -636,43 +676,64 @@ export default function AfrodexStaking() {
                 </div>
 
                 <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20">
-                  <div className="text-xs text-gray-400">Projection Rules (hidden APR)</div>
-                  <div className="text-sm text-gray-200 mt-2">
-                    Initial 30 days: Daily rate = {String(DAILY_RATE_DEC)} (applies to all stakers)<br />
-                    After 30 days: Daily rate = base + bonus = {String(DAILY_RATE_DEC + BONUS_DAILY_DEC)}<br />
-                    Yearly projection uses 30 days @ base + 335 days @ base+bonus.
+                  <div className="text-xs text-gray-400 mb-3">Token Analytics</div>
+                  <div className="text-xs text-gray-300 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Maximum Supply:</span>
+                      <span className="text-white font-medium">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Current Supply:</span>
+                      <span className="text-white font-medium">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Rewards Minted:</span>
+                      <span className="text-green-300 font-medium">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-gray-700 pt-2 mt-2">
+                      <span className="text-gray-400">Un-minted:</span>
+                      <span className="text-orange-300 font-medium">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <section className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
               <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
-                <div className="text-sm text-gray-300">Token Analytics</div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div className="flex items-center gap-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Maximum Supply: <span className="ml-auto text-white">{maximumSupply ?? '—'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Current Total Supply: <span className="ml-auto text-white">{totalSupply ?? '—'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Total Stake Reward Minted: <span className="ml-auto text-white">{totalStakeRewardMinted ?? '—'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Un-minted AfroX: <span className="ml-auto text-white">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 0) : '—'}</span></div>
-                </div>
-              </div>
-
-              <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
-                <div className="text-sm text-gray-300">Protocol Parameters (read-only)</div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div>rewardRate: {String(REWARD_RATE)} (used as decimal REWARD_RATE / 10000)</div>
-                  <div>bonusRate: {String(BONUS_RATE)}</div>
-                  <div>stakeRewardPeriod: {String(STAKE_REWARD_PERIOD)}</div>
-                  <div>stakeBonusPeriod: {String(STAKE_BONUS_PERIOD)}</div>
-                </div>
-              </div>
-
-              <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
-                <div className="text-sm text-gray-300">Debug / Status</div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div>Connected: <span className="text-white ml-2">{isConnected ? 'Yes' : 'No'}</span></div>
-                  <div>Wallet: <span className="text-white ml-2">{address ? shortAddr(address) : '—'}</span></div>
-                  <div>Token decimals: <span className="text-orange-300 ml-2">{decimals}</span></div>
+                <div className="text-sm text-gray-300 mb-3">Token Analytics</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Maximum Supply</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-white font-bold">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Current Total Supply</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-white font-bold">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Stake Rewards Minted</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-green-300 font-bold">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Un-minted AfroX</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-orange-300 font-bold">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
