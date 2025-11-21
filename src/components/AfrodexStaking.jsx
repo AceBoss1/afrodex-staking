@@ -1,3 +1,4 @@
+
 // src/components/AfrodexStaking.jsx
 'use client';
 
@@ -574,7 +575,13 @@ export default function AfrodexStaking() {
                     </div>
                   </div>
                 </div>
-
+                <div className="mt-3 text-xs text-gray-400">
+                  <div className="font-semibold text-gray-300 mb-1">{badgeTier.threshold}</div>
+                  <div className="text-[10px] leading-relaxed">
+                    🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B<br/>
+                    ⭐General ≥100B | 〽️Marshal ≥500B<br/>
+                    💠Platinum ≥1T | ❇️Diamond ≥10T
+                  </div>
                 </div>
               </motion.div>
             </section>
@@ -602,13 +609,8 @@ export default function AfrodexStaking() {
                   <button onClick={() => doStake(stakeAmount)} disabled={!isConnected || loading} className="py-3 rounded-xl bg-orange-500 text-black font-semibold">Stake</button>
                 </div>
 
-                <div className="mt-3 text-xs text-gray-400">
-                  <div className="font-semibold text-gray-300 mb-1">{badgeTier.threshold}</div>
-                  <div className="text-[10px] leading-relaxed">
-                    🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B<br/>
-                    ⭐General ≥100B | 〽️Marshal ≥500B<br/>
-                    💠Platinum ≥1T | ❇️Diamond ≥10T
-                  </div>
+                <div className="mt-4 text-xs text-gray-400">Allowance (for UI/debug): <span className="text-orange-300 font-medium">{allowance}</span></div>
+                {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
               </motion.div>
 
  {/* Unstake & Claim */}
