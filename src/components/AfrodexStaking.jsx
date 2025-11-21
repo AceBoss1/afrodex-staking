@@ -239,12 +239,12 @@ export default function AfrodexStaking() {
     if (staked >= 10e12) return { name: 'Diamond Custodian', emoji: '❇️', threshold: '≥10T AfroX' };
     if (staked >= 1e12) return { name: 'Platinum Sentinel', emoji: '💠', threshold: '≥1T AfroX' };
     if (staked >= 500e9) return { name: 'Marshal', emoji: '〽️', threshold: '≥500B AfroX' };
-    if (staked >= 100e9) return { name: 'General', emoji: '✳️', threshold: '≥100B AfroX' };
+    if (staked >= 100e9) return { name: 'General', emoji: '⭐', threshold: '≥100B AfroX' };
     if (staked >= 50e9) return { name: 'Commander', emoji: '⚜️', threshold: '≥50B AfroX' };
     if (staked >= 10e9) return { name: 'Captain', emoji: '🔱', threshold: '≥10B AfroX' };
     if (staked >= 1e9) return { name: 'Cadet', emoji: '🔰', threshold: '≥1B AfroX' };
     
-    return { name: 'Starter', emoji: '⭐', threshold: 'Stake to unlock' };
+    return { name: 'Starter', emoji: '✳️', threshold: 'Stake to unlock' };
   }, [stakedBalance]);
 
   const projections = useMemo(() => calcProjections(stakedBalance), [calcProjections, stakedBalance, stakedDays]);
@@ -574,13 +574,7 @@ export default function AfrodexStaking() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div className="font-semibold text-gray-300 mb-1">{badgeTier.threshold}</div>
-                  <div className="text-[10px] leading-relaxed">
-                    🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B<br/>
-                    ✳️General ≥100B | 〽️Marshal ≥500B<br/>
-                    💠Platinum ≥1T | ❇️Diamond ≥10T
-                  </div>
+
                 </div>
               </motion.div>
             </section>
@@ -608,8 +602,13 @@ export default function AfrodexStaking() {
                   <button onClick={() => doStake(stakeAmount)} disabled={!isConnected || loading} className="py-3 rounded-xl bg-orange-500 text-black font-semibold">Stake</button>
                 </div>
 
-                <div className="mt-4 text-xs text-gray-400">Allowance (for UI/debug): <span className="text-orange-300 font-medium">{allowance}</span></div>
-                {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
+                <div className="mt-3 text-xs text-gray-400">
+                  <div className="font-semibold text-gray-300 mb-1">{badgeTier.threshold}</div>
+                  <div className="text-[10px] leading-relaxed">
+                    🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B<br/>
+                    ⭐General ≥100B | 〽️Marshal ≥500B<br/>
+                    💠Platinum ≥1T | ❇️Diamond ≥10T
+                  </div>
               </motion.div>
 
  {/* Unstake & Claim */}
