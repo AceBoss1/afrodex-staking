@@ -210,13 +210,13 @@ export default function AfrodexStaking() {
   const getBadgeTier = useCallback(() => {
     const staked = Number(stakedBalance || '0');
     
-    if (staked >= 10e12) return { name: '❇️Diamond Custodian', emoji: '❇️', threshold: '≥10T AfroX' };
-    if (staked >= 1e12) return { name: '💠Platinum Sentinel', emoji: '💠', threshold: '≥1T AfroX' };
-    if (staked >= 500e9) return { name: '〽️Marshal', emoji: '〽️', threshold: '≥500B AfroX' };
-    if (staked >= 100e9) return { name: '✳️General', emoji: '✳️', threshold: '≥100B AfroX' };
-    if (staked >= 50e9) return { name: '⚜️Commander', emoji: '⚜️', threshold: '≥50B AfroX' };
-    if (staked >= 10e9) return { name: '🔱Captain', emoji: '🔱', threshold: '≥10B AfroX' };
-    if (staked >= 1e9) return { name: '🔰Cadet', emoji: '🔰', threshold: '≥1B AfroX' };
+    if (staked >= 10e12) return { name: 'Diamond Custodian', emoji: '❇️', threshold: '≥10T AfroX' };
+    if (staked >= 1e12) return { name: 'Platinum Sentinel', emoji: '💠', threshold: '≥1T AfroX' };
+    if (staked >= 500e9) return { name: 'Marshal', emoji: '〽️', threshold: '≥500B AfroX' };
+    if (staked >= 100e9) return { name: 'General', emoji: '✳️', threshold: '≥100B AfroX' };
+    if (staked >= 50e9) return { name: 'Commander', emoji: '⚜️', threshold: '≥50B AfroX' };
+    if (staked >= 10e9) return { name: 'Captain', emoji: '🔱', threshold: '≥10B AfroX' };
+    if (staked >= 1e9) return { name: 'Cadet', emoji: '🔰', threshold: '≥1B AfroX' };
     
     return { name: 'Starter', emoji: '⭐', threshold: 'Stake to unlock' };
   }, [stakedBalance]);
