@@ -6,8 +6,6 @@ import { motion } from 'framer-motion';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 
-import { Analytics } from "@vercel/analytics/next"
-
 import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis';
 import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
 
