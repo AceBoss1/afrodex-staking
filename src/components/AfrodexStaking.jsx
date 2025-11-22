@@ -12,13 +12,11 @@ import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } f
 const TOKEN_LOGO = '/afrodex_token.png';
 const DEFAULT_DECIMALS = 4;
 
-// CONTRACT constants
 const REWARD_RATE = 60n;
 const BONUS_RATE = 6n;
 const STAKE_REWARD_PERIOD = 86400;
 const STAKE_BONUS_PERIOD = 2592000;
 
-// Derived decimals for display math
 const DAILY_RATE_DEC = Number(REWARD_RATE) / 10000;
 const BONUS_DAILY_DEC = Number(BONUS_RATE) / 10000;
 const FIRST_30_DAYS = 30;
@@ -29,33 +27,27 @@ export default function AfrodexStaking() {
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
-  // token decimals & on-chain values
   const [decimals, setDecimals] = useState(DEFAULT_DECIMALS);
   const [walletBalance, setWalletBalance] = useState('0');
   const [stakedBalance, setStakedBalance] = useState('0');
   const [rewardsAccum, setRewardsAccum] = useState('0');
   const [allowance, setAllowance] = useState('0');
 
-  // timestamps
   const [lastUnstakeTs, setLastUnstakeTs] = useState(0);
   const [lastRewardTs, setLastRewardTs] = useState(0);
 
-  // token analytics
   const [maximumSupply, setMaximumSupply] = useState(null);
   const [totalSupply, setTotalSupply] = useState(null);
   const [totalStakeRewardMinted, setTotalStakeRewardMinted] = useState(null);
 
-  // form + UX
   const [stakeAmount, setStakeAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
 
-  // tabs
   const [activeTab, setActiveTab] = useState('staking');
 
-  // --- helpers ---
   const shortAddr = (a) => (a ? `${a.slice(0, 6)}...${a.slice(-4)}` : '—');
   const showAlert = (m, t = 6000) => {
     setAlertMsg(String(m));
@@ -84,7 +76,6 @@ export default function AfrodexStaking() {
     }
   }, [decimals]);
 
-  // Format large numbers with abbreviations (K, M, B, T, Q)
   function prettyNumber(humanStr, precision = 2) {
     try {
       const n = Number(humanStr || '0');
@@ -92,17 +83,11 @@ export default function AfrodexStaking() {
       
       const absN = Math.abs(n);
       
-      if (absN >= 1e15) { // Quadrillion
-        return (n / 1e15).toFixed(precision) + 'Q';
-      } else if (absN >= 1e12) { // Trillion
-        return (n / 1e12).toFixed(precision) + 'T';
-      } else if (absN >= 1e9) { // Billion
-        return (n / 1e9).toFixed(precision) + 'B';
-      } else if (absN >= 1e6) { // Million
-        return (n / 1e6).toFixed(precision) + 'M';
-      } else if (absN >= 1e3) { // Thousand
-        return (n / 1e3).toFixed(precision) + 'K';
-      }
+      if (absN >= 1e15) return (n / 1e15).toFixed(precision) + 'Q';
+      else if (absN >= 1e12) return (n / 1e12).toFixed(precision) + 'T';
+      else if (absN >= 1e9) return (n / 1e9).toFixed(precision) + 'B';
+      else if (absN >= 1e6) return (n / 1e6).toFixed(precision) + 'M';
+      else if (absN >= 1e3) return (n / 1e3).toFixed(precision) + 'K';
       
       return n.toLocaleString(undefined, { maximumFractionDigits: precision });
     } catch {
@@ -110,12 +95,10 @@ export default function AfrodexStaking() {
     }
   }
 
-  // ---- On-chain fetcher (FIXED) ----
   const fetchOnChain = useCallback(async () => {
     if (!publicClient) return;
 
     try {
-      // decimals
       const decRaw = await readContractSafe(publicClient, {
         address: TOKEN_ADDRESS,
         abi: AFROX_PROXY_ABI,
@@ -125,7 +108,6 @@ export default function AfrodexStaking() {
       const d = decRaw !== null && decRaw !== undefined ? Number(decRaw) : DEFAULT_DECIMALS;
       setDecimals(Number.isFinite(d) ? d : DEFAULT_DECIMALS);
 
-      // ⭐ WALLET BALANCE FIX
       if (address) {
         const walletBal = await readContractSafe(publicClient, {
           address: TOKEN_ADDRESS,
@@ -143,7 +125,6 @@ export default function AfrodexStaking() {
         setWalletBalance('0');
       }
 
-      // staking info
       if (address) {
         const stakeInfo = await readContractSafe(publicClient, {
           address: STAKING_ADDRESS,
@@ -175,7 +156,6 @@ export default function AfrodexStaking() {
         setLastRewardTs(0);
       }
 
-      // token analytics
       const maxS = await readContractSafe(publicClient, {
         address: TOKEN_ADDRESS,
         abi: AFROX_PROXY_ABI,
@@ -201,7 +181,6 @@ export default function AfrodexStaking() {
     }
   }, [publicClient, address, toHuman]);
 
-  // poll every 30s when connected
   useEffect(() => {
     fetchOnChain();
     let t;
@@ -209,7 +188,6 @@ export default function AfrodexStaking() {
     return () => clearInterval(t);
   }, [fetchOnChain, isConnected]);
 
-  // ---- Rewards projection logic ----
   const stakedDays = useMemo(() => {
     const ref = lastUnstakeTs && lastUnstakeTs > 0 ? lastUnstakeTs : lastRewardTs;
     if (!ref || ref <= 0) return 0;
@@ -232,7 +210,6 @@ export default function AfrodexStaking() {
     return { daily, monthly, yearly };
   }, [stakedBalance, stakedDays]);
 
-  // Calculate badge tier based on staked amount
   const getBadgeTier = useCallback(() => {
     const staked = Number(stakedBalance || '0');
     
@@ -250,7 +227,6 @@ export default function AfrodexStaking() {
   const projections = useMemo(() => calcProjections(stakedBalance), [calcProjections, stakedBalance, stakedDays]);
   const badgeTier = useMemo(() => getBadgeTier(), [getBadgeTier]);
 
-  // ---- Actions ----
   const ensureClient = () => {
     if (!walletClient) throw new Error('Wallet client not available');
     return walletClient;
@@ -502,7 +478,6 @@ export default function AfrodexStaking() {
     }
   }
 
-  // UI helpers
   function fillMaxStake() {
     setStakeAmount(walletBalance || '0');
   }
@@ -530,6 +505,7 @@ export default function AfrodexStaking() {
       <main className="max-w-6xl mx-auto px-6 pb-12">
         <div className="flex gap-4 mb-6">
           <button onClick={() => setActiveTab('staking')} className={`px-3 py-2 rounded ${activeTab === 'staking' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroX Staking Dashboard</button>
+          <button onClick={() => setActiveTab('lp-mining')} className={`px-3 py-2 rounded ${activeTab === 'lp-mining' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>LP-Token-Lock-Mining Dashboard</button>
           <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroDex Ambassador Dashboard</button>
           <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroDex Community of Trust</button>
         </div>
@@ -565,23 +541,14 @@ export default function AfrodexStaking() {
               </motion.div>
 
               <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10 flex flex-col justify-between" whileHover={{ ...cardGlow }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-gray-300">Badge Tier</div>
-                    <div className="text-2xl font-semibold text-orange-300 flex items-center gap-2 mt-1">
-                      <span>{badgeTier.emoji}</span>
-                      <span>{badgeTier.name}</span>
-                    </div>
+                <div>
+                  <div className="text-sm text-gray-300">Badge Tier</div>
+                  <div className="text-2xl font-semibold text-orange-300 flex items-center gap-2 mt-1">
+                    <span>{badgeTier.emoji}</span>
+                    <span>{badgeTier.name}</span>
                   </div>
                 </div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div className="font-semibold text-gray-300 mb-1">{badgeTier.threshold}</div>
-                  <div className="text-[10px] leading-relaxed">
-                    🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B<br/>
-                    ⭐General ≥100B | 〽️Marshal ≥500B<br/>
-                    💠Platinum ≥1T | ❇️Diamond ≥10T
-                  </div>
-                </div>
+                <div className="mt-3 text-xs text-gray-300 font-semibold">{badgeTier.threshold}</div>
               </motion.div>
             </section>
 
@@ -597,6 +564,39 @@ export default function AfrodexStaking() {
                     step={1 / (10 ** decimals)}
                     value={stakeAmount}
                     onChange={(e) => setStakeAmount(e.target.value)}
+                    placeholder="0.0"
+                    className="flex-1 p-3 rounded bg-gray-800 text-white placeholder-gray-400 outline-none border border-transparent focus:border-orange-500"
+                  />
+                  <button onClick={fillMaxStake} className="px-3 rounded bg-gray-800 border border-gray-700 text-sm">MAX</button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => doApprove(stakeAmount || '1000000')} disabled={!isConnected || loading} className="py-3 rounded-xl bg-black border-2 border-orange-500 text-orange-50 font-medium shadow">Approve</button>
+                  <button onClick={() => doStake(stakeAmount)} disabled={!isConnected || loading} className="py-3 rounded-xl bg-orange-500 text-black font-semibold">Stake</button>
+                </div>
+
+                <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+                  <div className="text-xs text-gray-400 mb-2 font-semibold">Badge Tier Requirements:</div>
+                  <div className="text-[10px] text-gray-300 leading-relaxed space-y-1">
+                    <div>🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B</div>
+                    <div>⭐General ≥100B | 〽️Marshal ≥500B</div>
+                    <div>💠Platinum Sentinel ≥1T | ❇️Diamond Custodian ≥10T</div>
+                  </div>
+                </div>
+                {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
+              </motion.div>
+
+              <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" whileHover={{ scale: 1.01 }}>
+                <h2 className="text-xl font-bold mb-3">Unstake & Claim</h2>
+                <div className="text-sm text-gray-400 mb-4">Unstake tokens (this also auto-claims rewards). Alternatively use Claim to run a tiny unstake/restake claim if contract has no claim fn.</div>
+
+                <label className="block text-xs text-gray-300 mb-1">Amount to Unstake</label>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="number"
+                    step={1 / (10 ** decimals)}
+                    value={unstakeAmount}
+                    onChange={(e) => setUnstakeAmount(e.target.value)}
                     placeholder="0.0"
                     className="flex-1 p-3 rounded bg-gray-800 text-white placeholder-gray-400 outline-none border border-transparent focus:border-orange-500"
                   />
@@ -727,6 +727,13 @@ export default function AfrodexStaking() {
           </>
         )}
 
+        {activeTab === 'lp-mining' && (
+          <div className="p-6 bg-gray-900 rounded">
+            <h2 className="text-xl font-bold">LP-Token-Lock-Mining Dashboard</h2>
+            <p className="text-gray-300 mt-2">Coming soon — Lock your LP tokens and earn mining rewards.</p>
+          </div>
+        )}
+
         {activeTab === 'ambassador' && (
           <div className="p-6 bg-gray-900 rounded">
             <h2 className="text-xl font-bold">AfroDex Ambassador Dashboard</h2>
@@ -745,30 +752,4 @@ export default function AfrodexStaking() {
       {alertMsg && <div className="fixed right-4 bottom-4 bg-[#0b0b0b] border border-orange-500 text-orange-300 p-3 rounded shadow-lg z-50">{alertMsg}</div>}
     </div>
   );
-} border-transparent focus:border-orange-500"
-                  />
-                  <button onClick={fillMaxStake} className="px-3 rounded bg-gray-800 border border-gray-700 text-sm">MAX</button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => doApprove(stakeAmount || '1000000')} disabled={!isConnected || loading} className="py-3 rounded-xl bg-black border-2 border-orange-500 text-orange-50 font-medium shadow">Approve</button>
-                  <button onClick={() => doStake(stakeAmount)} disabled={!isConnected || loading} className="py-3 rounded-xl bg-orange-500 text-black font-semibold">Stake</button>
-                </div>
-
-                <div className="mt-4 text-xs text-gray-400">Allowance (for UI/debug): <span className="text-orange-300 font-medium">{allowance}</span></div>
-                {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
-              </motion.div>
-
-              <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" whileHover={{ scale: 1.01 }}>
-                <h2 className="text-xl font-bold mb-3">Unstake & Claim</h2>
-                <div className="text-sm text-gray-400 mb-4">Unstake tokens (this also auto-claims rewards). Alternatively use Claim to run a tiny unstake/restake claim if contract has no claim fn.</div>
-
-                <label className="block text-xs text-gray-300 mb-1">Amount to Unstake</label>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="number"
-                    step={1 / (10 ** decimals)}
-                    value={unstakeAmount}
-                    onChange={(e) => setUnstakeAmount(e.target.value)}
-                    placeholder="0.0"
-                    className="flex-1 p-3 rounded bg-gray-800 text-white placeholder-gray-400 outline-none border
+}
