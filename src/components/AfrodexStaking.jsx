@@ -783,7 +783,7 @@ export default function AfrodexStaking() {
 
         {activeTab === 'lp-mining' && (
           <div className="p-6 bg-gray-900 rounded">
-            <h2 className="text-xl font-bold">LP-Token-Lock-Mining Dashboard</h2>
+            <h2 className="text-xl font-bold">LP Token Lock-Mining Dashboard</h2>
             <p className="text-gray-300 mt-2">Coming soon — Lock your LP tokens and earn mining rewards.</p>
           </div>
         )}
