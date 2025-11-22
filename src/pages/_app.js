@@ -1,3 +1,4 @@
+// src/pages/_app.js - FIXED VERSION
 import '../styles/globals.css';
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -6,7 +7,6 @@ import { WagmiProvider } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
 import { http } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -27,14 +27,16 @@ const queryClient = new QueryClient();
 
 export default function App({ Component, pageProps }) {
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-          <Component {...pageProps} />
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
-        <Analytics />
+    <>
+      <WagmiProvider config={config}>
+        <QueryClientProvider client={queryClient}>
+          <RainbowKitProvider>
+            <Component {...pageProps} />
+          </RainbowKitProvider>
+        </QueryClientProvider>
+      </WagmiProvider>
+      <Analytics />
       <SpeedInsights />
+    </>
   );
 }
