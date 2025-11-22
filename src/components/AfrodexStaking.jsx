@@ -508,7 +508,7 @@ export default function AfrodexStaking() {
           <button onClick={() => setActiveTab('lp-mining')} className={`px-3 py-2 rounded ${activeTab === 'lp-mining' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>LP Token Lock-Mining Dashboard</button>
           <a href="https://dex.afrox.one/" target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded bg-gray-900 text-gray-300 hover:bg-orange-600 hover:text-black transition-colors">AfroSwap</a>
           <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Ambassador Dashboard</button>
-          <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Community of Trust</button>
+          <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Community of Trust Dashboard</button>
         </div>
 
         {activeTab === 'staking' && (
@@ -797,7 +797,7 @@ export default function AfrodexStaking() {
 
         {activeTab === 'governance' && (
           <div className="p-6 bg-gray-900 rounded">
-            <h2 className="text-xl font-bold">Community of Trust</h2>
+            <h2 className="text-xl font-bold">Community of Trust Dashboard</h2>
             <p className="text-gray-300 mt-2">Placeholder — governance, proposals, and tier management will appear here.</p>
           </div>
         )}
