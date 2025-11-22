@@ -7,6 +7,9 @@ import { mainnet } from 'wagmi/chains';
 import { http } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 const alchemyKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
@@ -31,5 +34,7 @@ export default function App({ Component, pageProps }) {
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
+        <Analytics />
+      <SpeedInsights />
   );
 }
