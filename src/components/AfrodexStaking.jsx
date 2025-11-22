@@ -8,6 +8,7 @@ import { formatUnits, parseUnits } from 'viem';
 
 import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis';
 import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
+import AmbassadorDashboard from './AmbassadorDashboard';
 
 const TOKEN_LOGO = '/afrodex_token.png';
 const DEFAULT_DECIMALS = 4;
