@@ -505,10 +505,10 @@ export default function AfrodexStaking() {
       <main className="max-w-6xl mx-auto px-6 pb-12">
         <div className="flex gap-4 mb-6 flex-wrap">
           <button onClick={() => setActiveTab('staking')} className={`px-3 py-2 rounded ${activeTab === 'staking' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroX Staking Dashboard</button>
-          <button onClick={() => setActiveTab('lp-mining')} className={`px-3 py-2 rounded ${activeTab === 'lp-mining' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>LP-Token-Lock-Mining Dashboard</button>
-          <a href="https://dex.afrox.one/" target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded bg-gray-900 text-gray-300 hover:bg-orange-600 hover:text-black transition-colors">AfroSwap 🔗</a>
-          <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroDex Ambassador Dashboard</button>
-          <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroDex Community of Trust</button>
+          <button onClick={() => setActiveTab('lp-mining')} className={`px-3 py-2 rounded ${activeTab === 'lp-mining' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>LP Token Lock-Mining Dashboard</button>
+          <a href="https://dex.afrox.one/" target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded bg-gray-900 text-gray-300 hover:bg-orange-600 hover:text-black transition-colors">AfroSwap</a>
+          <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Ambassador Dashboard</button>
+          <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Community of Trust</button>
         </div>
 
         {activeTab === 'staking' && (
