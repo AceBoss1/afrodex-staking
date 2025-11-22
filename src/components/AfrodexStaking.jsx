@@ -503,9 +503,10 @@ export default function AfrodexStaking() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 pb-12">
-        <div className="flex gap-4 mb-6">
+        <div className="flex gap-4 mb-6 flex-wrap">
           <button onClick={() => setActiveTab('staking')} className={`px-3 py-2 rounded ${activeTab === 'staking' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroX Staking Dashboard</button>
           <button onClick={() => setActiveTab('lp-mining')} className={`px-3 py-2 rounded ${activeTab === 'lp-mining' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>LP-Token-Lock-Mining Dashboard</button>
+          <a href="https://dex.afrox.one/" target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded bg-gray-900 text-gray-300 hover:bg-orange-600 hover:text-black transition-colors">AfroSwap 🔗</a>
           <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroDex Ambassador Dashboard</button>
           <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroDex Community of Trust</button>
         </div>
@@ -579,7 +580,7 @@ export default function AfrodexStaking() {
                   <div className="text-xs text-gray-400 mb-2 font-semibold">Badge Tier Requirements:</div>
                   <div className="text-[10px] text-gray-300 leading-relaxed space-y-1">
                     <div>🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B | ⭐General ≥100B</div>
-                    <div> 〽️Marshal ≥500B | 💠Platinum Sentinel ≥1T | ❇️Diamond Custodian ≥10T</div>
+                    <div>〽️Marshal ≥500B | 💠Platinum Sentinel ≥1T | ❇️Diamond Custodian ≥10T</div>
                   </div>
                 </div>
                 {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
@@ -650,23 +651,77 @@ export default function AfrodexStaking() {
                 </div>
 
                 <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20">
-                  <div className="text-xs text-gray-400 mb-3">Token Analytics</div>
-                  <div className="text-xs text-gray-300 space-y-2">
+                  <div className="text-xs text-gray-400 mb-3 text-center font-semibold">Token Analytics</div>
+                  
+                  {/* Pie Chart */}
+                  <div className="flex justify-center mb-4">
+                    <div className="relative w-40 h-40">
+                      <svg viewBox="0 0 100 100" className="transform -rotate-90">
+                        {/* Current Supply - Blue */}
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="20"
+                          strokeDasharray="1.11 251.2"
+                          strokeDashoffset="0"
+                        />
+                        {/* Rewards Minted - Green */}
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="20"
+                          strokeDasharray="3.18 251.2"
+                          strokeDashoffset="-1.11"
+                        />
+                        {/* Un-minted - Orange */}
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="none"
+                          stroke="#f97316"
+                          strokeWidth="20"
+                          strokeDasharray="247.91 251.2"
+                          strokeDashoffset="-4.29"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="text-xs text-gray-400">Max Supply</div>
+                          <div className="text-sm font-bold text-white">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Legend */}
+                  <div className="text-[10px] text-gray-300 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Maximum Supply:</span>
-                      <span className="text-white font-medium">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
+                        <span>Current Supply:</span>
+                      </div>
+                      <span className="font-medium">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Current Supply:</span>
-                      <span className="text-white font-medium">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                        <span>Rewards Minted:</span>
+                      </div>
+                      <span className="font-medium text-green-300">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Rewards Minted:</span>
-                      <span className="text-green-300 font-medium">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-gray-700 pt-2 mt-2">
-                      <span className="text-gray-400">Un-minted:</span>
-                      <span className="text-orange-300 font-medium">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
+                    <div className="flex items-center justify-between border-t border-gray-700 pt-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full bg-orange-500"></div>
+                        <span>Un-minted:</span>
+                      </div>
+                      <span className="font-medium text-orange-300">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
                     </div>
                   </div>
                 </div>
