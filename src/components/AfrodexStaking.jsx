@@ -790,14 +790,14 @@ export default function AfrodexStaking() {
 
         {activeTab === 'ambassador' && (
           <div className="p-6 bg-gray-900 rounded">
-            <h2 className="text-xl font-bold">AfroDex Ambassador Dashboard</h2>
+            <h2 className="text-xl font-bold">Ambassador Dashboard</h2>
             <p className="text-gray-300 mt-2">Placeholder — referral & ambassador features will be added here.</p>
           </div>
         )}
 
         {activeTab === 'governance' && (
           <div className="p-6 bg-gray-900 rounded">
-            <h2 className="text-xl font-bold">AfroDex Community of Trust</h2>
+            <h2 className="text-xl font-bold">Community of Trust</h2>
             <p className="text-gray-300 mt-2">Placeholder — governance, proposals, and tier management will appear here.</p>
           </div>
         )}
