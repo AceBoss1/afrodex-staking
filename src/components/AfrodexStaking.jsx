@@ -578,9 +578,8 @@ export default function AfrodexStaking() {
                 <div className="mt-4 p-3 bg-gray-800 rounded-lg">
                   <div className="text-xs text-gray-400 mb-2 font-semibold">Badge Tier Requirements:</div>
                   <div className="text-[10px] text-gray-300 leading-relaxed space-y-1">
-                    <div>🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B</div>
-                    <div>⭐General ≥100B | 〽️Marshal ≥500B</div>
-                    <div>💠Platinum Sentinel ≥1T | ❇️Diamond Custodian ≥10T</div>
+                    <div>🔰Cadet ≥1B | 🔱Captain ≥10B | ⚜️Commander ≥50B | ⭐General ≥100B</div>
+                    <div> 〽️Marshal ≥500B | 💠Platinum Sentinel ≥1T | ❇️Diamond Custodian ≥10T</div>
                   </div>
                 </div>
                 {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
