@@ -5,5 +5,7 @@
       "rootDir": ["src/"]
     }
   },
-  "rules": {}
+  "rules": {
+    "@next/next/no-img-element": "off"
+  }
 }
