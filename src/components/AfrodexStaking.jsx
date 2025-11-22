@@ -224,7 +224,7 @@ export default function AfrodexStaking() {
     return { name: 'Starter', emoji: '✳️', threshold: 'Stake to unlock' };
   }, [stakedBalance]);
 
-  const projections = useMemo(() => calcProjections(stakedBalance), [calcProjections, stakedBalance, stakedDays]);
+  const projections = useMemo(() => calcProjections(stakedBalance), [calcProjections, stakedBalance]);
   const badgeTier = useMemo(() => getBadgeTier(), [getBadgeTier]);
 
   const ensureClient = () => {
