@@ -1,4 +1,3 @@
-
 // src/components/AfrodexStaking.jsx
 'use client';
 
@@ -601,33 +600,6 @@ export default function AfrodexStaking() {
                     placeholder="0.0"
                     className="flex-1 p-3 rounded bg-gray-800 text-white placeholder-gray-400 outline-none border border-transparent focus:border-orange-500"
                   />
-                  <button onClick={fillMaxStake} className="px-3 rounded bg-gray-800 border border-gray-700 text-sm">MAX</button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => doApprove(stakeAmount || '1000000')} disabled={!isConnected || loading} className="py-3 rounded-xl bg-black border-2 border-orange-500 text-orange-50 font-medium shadow">Approve</button>
-                  <button onClick={() => doStake(stakeAmount)} disabled={!isConnected || loading} className="py-3 rounded-xl bg-orange-500 text-black font-semibold">Stake</button>
-                </div>
-
-                <div className="mt-4 text-xs text-gray-400">Allowance (for UI/debug): <span className="text-orange-300 font-medium">{allowance}</span></div>
-                {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
-              </motion.div>
-
- {/* Unstake & Claim */}
-              <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" whileHover={{ scale: 1.01 }}>
-                <h2 className="text-xl font-bold mb-3">Unstake & Claim</h2>
-                <div className="text-sm text-gray-400 mb-4">Unstake tokens (this also auto-claims rewards). Alternatively use Claim to run a tiny unstake/restake claim if contract has no claim fn.</div>
-
-                <label className="block text-xs text-gray-300 mb-1">Amount to Unstake</label>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="number"
-                    step={1 / (10 ** decimals)}
-                    value={unstakeAmount}
-                    onChange={(e) => setUnstakeAmount(e.target.value)}
-                    placeholder="0.0"
-                    className="flex-1 p-3 rounded bg-gray-800 text-white placeholder-gray-400 outline-none border border-transparent focus:border-orange-500"
-                  />
                   <button onClick={fillMaxUnstake} className="px-3 rounded bg-gray-800 border border-gray-700 text-sm">MAX</button>
                 </div>
 
@@ -640,7 +612,6 @@ export default function AfrodexStaking() {
               </motion.div>
             </section>
 
-            {/* Rewards center + projection */}
             <section className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10 mb-6">
               <h3 className="text-lg font-bold mb-4">Rewards Projection Calculator</h3>
 
@@ -653,7 +624,7 @@ export default function AfrodexStaking() {
                       <div className="text-xs text-gray-400">Daily Reward</div>
                       <div className="flex items-center gap-2 mt-2">
                         <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.daily, 6)} AfroX</div>
+                        <div className="text-xl font-bold">{prettyNumber(projections.daily, 2)} AfroX</div>
                       </div>
                     </div>
 
@@ -661,7 +632,7 @@ export default function AfrodexStaking() {
                       <div className="text-xs text-gray-400">Monthly Reward (30d)</div>
                       <div className="flex items-center gap-2 mt-2">
                         <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.monthly, 6)} AfroX</div>
+                        <div className="text-xl font-bold">{prettyNumber(projections.monthly, 2)} AfroX</div>
                       </div>
                     </div>
 
@@ -669,7 +640,7 @@ export default function AfrodexStaking() {
                       <div className="text-xs text-gray-400">Yearly Reward (365d)</div>
                       <div className="flex items-center gap-2 mt-2">
                         <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.yearly, 6)} AfroX</div>
+                        <div className="text-xl font-bold">{prettyNumber(projections.yearly, 2)} AfroX</div>
                       </div>
                     </div>
                   </div>
@@ -680,49 +651,68 @@ export default function AfrodexStaking() {
                 </div>
 
                 <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20">
-                  <div className="text-xs text-gray-400">Projection Rules (hidden APR)</div>
-                  <div className="text-sm text-gray-200 mt-2">
-                    Initial 30 days: Daily rate = {String(DAILY_RATE_DEC)} (applies to all stakers)<br />
-                    After 30 days: Daily rate = base + bonus = {String(DAILY_RATE_DEC + BONUS_DAILY_DEC)}<br />
-                    Yearly projection uses 30 days @ base + 335 days @ base+bonus.
+                  <div className="text-xs text-gray-400 mb-3">Token Analytics</div>
+                  <div className="text-xs text-gray-300 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Maximum Supply:</span>
+                      <span className="text-white font-medium">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Current Supply:</span>
+                      <span className="text-white font-medium">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Rewards Minted:</span>
+                      <span className="text-green-300 font-medium">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-gray-700 pt-2 mt-2">
+                      <span className="text-gray-400">Un-minted:</span>
+                      <span className="text-orange-300 font-medium">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Token analytics & debug */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <section className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
               <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
-                <div className="text-sm text-gray-300">Token Analytics</div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div className="flex items-center gap-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Maximum Supply: <span className="ml-auto text-white">{maximumSupply ?? '2,100,000,000,000,000.0000'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Current Total Supply: <span className="ml-auto text-white">{totalSupply ?? '23,285,767,821,382.7321'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Total Stake Reward Minted: <span className="ml-auto text-white">{totalStakeRewardMinted ?? '66,842,437,162,279.3871'}</span></div>
-                  <div className="flex items-center gap-2 mt-2"><img src={TOKEN_LOGO} className="h-4 w-4" alt="" /> Un-minted AfroX: <span className="ml-auto text-white">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 0) : '2,033,157,563,000,000.0000'}</span></div>
-                </div>
-              </div>
-
-              <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
-                <div className="text-sm text-gray-300">Protocol Parameters (read-only)</div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div>rewardRate: {String(REWARD_RATE)} (used as decimal `REWARD_RATE / 10000`)</div>
-                  <div>bonusRate: {String(BONUS_RATE)}</div>
-                  <div>stakeRewardPeriod: {String(STAKE_REWARD_PERIOD)}</div>
-                  <div>stakeBonusPeriod: {String(STAKE_BONUS_PERIOD)}</div>
-                </div>
-              </div>
-
-              <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
-                <div className="text-sm text-gray-300">Debug / Status</div>
-                <div className="mt-3 text-xs text-gray-400">
-                  <div>Connected: <span className="text-white ml-2">{isConnected ? 'Yes' : 'No'}</span></div>
-                  <div>Wallet: <span className="text-white ml-2">{address ? shortAddr(address) : '—'}</span></div>
-                  <div>Token decimals: <span className="text-orange-300 ml-2">{decimals}</span></div>
+                <div className="text-sm text-gray-300 mb-3">Token Analytics</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Maximum Supply</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-white font-bold">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Current Total Supply</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-white font-bold">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Stake Rewards Minted</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-green-300 font-bold">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center p-3 bg-gray-800 rounded">
+                    <div className="text-xs text-gray-400 mb-1">Un-minted AfroX</div>
+                    <div className="flex items-center justify-center gap-1">
+                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
+                      <span className="text-orange-300 font-bold">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
 
-            {/* IMPORTANT DISCLAIMER & FOOTER */}
             <div className="mt-4">
               <div className="p-4 bg-[#0b0b0b] rounded border border-gray-800 text-sm text-gray-300">
                 ⚠️ <strong>Important Disclaimer:</strong> By using this platform you confirm you are of legal age, live in a jurisdiction where staking crypto is permitted, and accept all liability and risk.
@@ -737,7 +727,6 @@ export default function AfrodexStaking() {
           </>
         )}
 
-        {/* Ambassador tab placeholder */}
         {activeTab === 'ambassador' && (
           <div className="p-6 bg-gray-900 rounded">
             <h2 className="text-xl font-bold">AfroDex Ambassador Dashboard</h2>
@@ -745,7 +734,6 @@ export default function AfrodexStaking() {
           </div>
         )}
 
-        {/* Governance tab placeholder */}
         {activeTab === 'governance' && (
           <div className="p-6 bg-gray-900 rounded">
             <h2 className="text-xl font-bold">AfroDex Community of Trust</h2>
@@ -754,8 +742,33 @@ export default function AfrodexStaking() {
         )}
       </main>
 
-      {/* small alert toast */}
       {alertMsg && <div className="fixed right-4 bottom-4 bg-[#0b0b0b] border border-orange-500 text-orange-300 p-3 rounded shadow-lg z-50">{alertMsg}</div>}
     </div>
   );
-}
+} border-transparent focus:border-orange-500"
+                  />
+                  <button onClick={fillMaxStake} className="px-3 rounded bg-gray-800 border border-gray-700 text-sm">MAX</button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => doApprove(stakeAmount || '1000000')} disabled={!isConnected || loading} className="py-3 rounded-xl bg-black border-2 border-orange-500 text-orange-50 font-medium shadow">Approve</button>
+                  <button onClick={() => doStake(stakeAmount)} disabled={!isConnected || loading} className="py-3 rounded-xl bg-orange-500 text-black font-semibold">Stake</button>
+                </div>
+
+                <div className="mt-4 text-xs text-gray-400">Allowance (for UI/debug): <span className="text-orange-300 font-medium">{allowance}</span></div>
+                {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-sm text-orange-200 break-all">{txHash}</span></div>}
+              </motion.div>
+
+              <motion.div className="bg-gray-900 p-6 rounded-3xl border border-transparent hover:border-orange-500/30" whileHover={{ scale: 1.01 }}>
+                <h2 className="text-xl font-bold mb-3">Unstake & Claim</h2>
+                <div className="text-sm text-gray-400 mb-4">Unstake tokens (this also auto-claims rewards). Alternatively use Claim to run a tiny unstake/restake claim if contract has no claim fn.</div>
+
+                <label className="block text-xs text-gray-300 mb-1">Amount to Unstake</label>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="number"
+                    step={1 / (10 ** decimals)}
+                    value={unstakeAmount}
+                    onChange={(e) => setUnstakeAmount(e.target.value)}
+                    placeholder="0.0"
+                    className="flex-1 p-3 rounded bg-gray-800 text-white placeholder-gray-400 outline-none border
