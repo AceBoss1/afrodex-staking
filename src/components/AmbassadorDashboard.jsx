@@ -1,7 +1,7 @@
 // src/components/AmbassadorDashboard.jsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
 
@@ -39,13 +39,7 @@ export default function AmbassadorDashboard() {
     'Diamond Custodian': { l1: 15, l2: 12, l3: 9, l4: 6, l5: 3 }
   };
 
-  useEffect(() => {
-    if (isConnected && address) {
-      loadAmbassadorData();
-    }
-  }, [isConnected, address]);
-
-  async function loadAmbassadorData() {
+  const loadAmbassadorData = useCallback(async () => {
     setLoading(true);
     try {
       // TODO: Replace with actual Supabase calls
@@ -75,7 +69,13 @@ export default function AmbassadorDashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [address]);
+
+  useEffect(() => {
+    if (isConnected && address) {
+      loadAmbassadorData();
+    }
+  }, [isConnected, address, loadAmbassadorData]);
 
   function copyReferralLink() {
     navigator.clipboard.writeText(referralLink);
@@ -292,7 +292,7 @@ export default function AmbassadorDashboard() {
           
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">🔒 Trust or Lose It</h3>
-            <p>The system operates on trust. Keep your stake active to benefit from your network's growth.</p>
+            <p>The system operates on trust. Keep your stake active to benefit from your network&apos;s growth.</p>
           </div>
         </div>
       </motion.div>
