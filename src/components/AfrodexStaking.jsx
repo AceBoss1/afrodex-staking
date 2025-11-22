@@ -775,7 +775,7 @@ export default function AfrodexStaking() {
 
               <footer className="border-t border-gray-800 py-6 mt-6">
                 <div className="max-w-6xl mx-auto px-6 text-center text-sm text-gray-400">
-                  © 2019-2025 AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
+                  © 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
                 </div>
               </footer>
             </div>
