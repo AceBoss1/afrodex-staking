@@ -398,8 +398,8 @@ export default function AfrodexStaking() {
       setLoading(false);
     }
   }
-   // CONTINUATION FROM LINE 400
-    
+// CONTINUATION FROM LINE 400
+
   async function doClaim() {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
@@ -790,7 +790,7 @@ export default function AfrodexStaking() {
           </div>
         )}
 
-        {activeTab === 'ambassador' && <AmbassadorDashboard />}
+        {activeTab === 'ambassador' && <AmbassadorDashboard stakedBalance={stakedBalance} />}
 
         {activeTab === 'governance' && (
           <div className="p-6 bg-gray-900 rounded">
