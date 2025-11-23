@@ -397,8 +397,8 @@ export default function AfrodexStaking() {
     } finally {
       setLoading(false);
     }
-  }
-
+   // CONTINUATION FROM LINE 400
+    
   async function doClaim() {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
@@ -775,7 +775,7 @@ export default function AfrodexStaking() {
 
               <footer className="border-t border-gray-800 py-6 mt-6">
                 <div className="max-w-6xl mx-auto px-6 text-center text-sm text-gray-400">
-                  © 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
+                  © 2019-2025 AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
                 </div>
               </footer>
             </div>
@@ -789,12 +789,7 @@ export default function AfrodexStaking() {
           </div>
         )}
 
-        {activeTab === 'ambassador' && (
-          <div className="p-6 bg-gray-900 rounded">
-            <h2 className="text-xl font-bold">Ambassador Dashboard</h2>
-            <p className="text-gray-300 mt-2">Placeholder — referral & ambassador features will be added here.</p>
-          </div>
-        )}
+        {activeTab === 'ambassador' && <AmbassadorDashboard />}
 
         {activeTab === 'governance' && (
           <div className="p-6 bg-gray-900 rounded">
