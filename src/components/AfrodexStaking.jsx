@@ -397,6 +397,7 @@ export default function AfrodexStaking() {
     } finally {
       setLoading(false);
     }
+  }
    // CONTINUATION FROM LINE 400
     
   async function doClaim() {
