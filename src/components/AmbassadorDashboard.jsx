@@ -22,7 +22,8 @@ export default function AmbassadorDashboard({ stakedBalance = '0' }) {
     pendingCommissions: 0,
     currentTier: 'Starter'
   });
-  const [referralTree, setReferralTree] = useState([]);
+  const [referralTree, setReferralTree] = useState(null);
+  const [showTree, setShowTree] = useState(false);
   const [claimableCommissions, setClaimableCommissions] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -222,21 +223,92 @@ export default function AmbassadorDashboard({ stakedBalance = '0' }) {
 
       {/* Referral Network Breakdown */}
       <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mb-6" whileHover={cardGlow}>
-        <h2 className="text-xl font-bold mb-4">Referral Network Breakdown</h2>
-        <div className="grid grid-cols-5 gap-3">
-          {[
-            { label: 'Level 1 (L1)', count: stats.l1, color: 'text-blue-400' },
-            { label: 'Level 2 (L2)', count: stats.l2, color: 'text-green-400' },
-            { label: 'Level 3 (L3)', count: stats.l3, color: 'text-yellow-400' },
-            { label: 'Level 4 (L4)', count: stats.l4, color: 'text-orange-400' },
-            { label: 'Level 5 (L5)', count: stats.l5, color: 'text-red-400' }
-          ].map((level) => (
-            <div key={level.label} className="text-center p-4 bg-gray-800 rounded">
-              <div className="text-xs text-gray-400 mb-2">{level.label}</div>
-              <div className={`text-3xl font-bold ${level.color}`}>{level.count}</div>
-            </div>
-          ))}
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Referral Network Breakdown</h2>
+          <button
+            onClick={() => setShowTree(!showTree)}
+            className="px-4 py-2 rounded bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold"
+          >
+            {showTree ? '📊 Show Stats' : '🌳 Show Tree'}
+          </button>
         </div>
+
+        {!showTree ? (
+          <div className="grid grid-cols-5 gap-3">
+            {[
+              { label: 'Level 1 (L1)', count: stats.l1, color: 'text-blue-400' },
+              { label: 'Level 2 (L2)', count: stats.l2, color: 'text-green-400' },
+              { label: 'Level 3 (L3)', count: stats.l3, color: 'text-yellow-400' },
+              { label: 'Level 4 (L4)', count: stats.l4, color: 'text-orange-400' },
+              { label: 'Level 5 (L5)', count: stats.l5, color: 'text-red-400' }
+            ].map((level) => (
+              <div key={level.label} className="text-center p-4 bg-gray-800 rounded">
+                <div className="text-xs text-gray-400 mb-2">{level.label}</div>
+                <div className={`text-3xl font-bold ${level.color}`}>{level.count}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-800 p-6 rounded-lg min-h-[400px]">
+            {/* Simple Tree Visualization */}
+            <div className="overflow-x-auto">
+              <div className="flex flex-col items-center space-y-4">
+                {/* Root (You) */}
+                <div className="flex flex-col items-center">
+                  <div className="px-4 py-2 bg-orange-600 rounded-lg text-white font-semibold">
+                    You ({currentBadge.emoji})
+                  </div>
+                </div>
+
+                {/* Level 1 */}
+                {stats.l1 > 0 && (
+                  <div className="flex flex-col items-center">
+                    <div className="h-8 w-0.5 bg-blue-400"></div>
+                    <div className="flex gap-4">
+                      {Array.from({ length: Math.min(stats.l1, 5) }).map((_, i) => (
+                        <div key={i} className="flex flex-col items-center">
+                          <div className="px-3 py-1.5 bg-blue-600 rounded text-white text-sm">L1</div>
+                          {stats.l2 > 0 && i === 0 && (
+                            <>
+                              <div className="h-6 w-0.5 bg-green-400"></div>
+                              <div className="px-3 py-1.5 bg-green-600 rounded text-white text-xs">L2</div>
+                              {stats.l3 > 0 && (
+                                <>
+                                  <div className="h-6 w-0.5 bg-yellow-400"></div>
+                                  <div className="px-3 py-1.5 bg-yellow-600 rounded text-white text-xs">L3</div>
+                                  {stats.l4 > 0 && (
+                                    <>
+                                      <div className="h-6 w-0.5 bg-orange-400"></div>
+                                      <div className="px-2 py-1 bg-orange-600 rounded text-white text-xs">L4</div>
+                                      {stats.l5 > 0 && (
+                                        <>
+                                          <div className="h-6 w-0.5 bg-red-400"></div>
+                                          <div className="px-2 py-1 bg-red-600 rounded text-white text-xs">L5</div>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {stats.l1 > 5 && (
+                        <div className="px-3 py-1.5 bg-gray-700 rounded text-gray-300 text-sm">
+                          +{stats.l1 - 5} more
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-6 text-center text-sm text-gray-400">
+              Simplified view showing your referral network structure
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {/* Claim Section */}
