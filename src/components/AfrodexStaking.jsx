@@ -9,6 +9,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis';
 import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
 import AmbassadorDashboard from './AmbassadorDashboard';
+import LPMiningDashboard from './LPMiningDashboard';
 
 const TOKEN_LOGO = '/afrodex_token.png';
 const DEFAULT_DECIMALS = 4;
@@ -398,7 +399,7 @@ export default function AfrodexStaking() {
       setLoading(false);
     }
   }
-// CONTINUATION FROM LINE 400
+  // CONTINUATION FROM LINE 400
 
   async function doClaim() {
     try {
@@ -783,12 +784,7 @@ export default function AfrodexStaking() {
           </>
         )}
 
-        {activeTab === 'lp-mining' && (
-          <div className="p-6 bg-gray-900 rounded">
-            <h2 className="text-xl font-bold">LP Token Lock-Mining Dashboard</h2>
-            <p className="text-gray-300 mt-2">Coming soon — Lock your LP tokens and earn mining rewards.</p>
-          </div>
-        )}
+        {activeTab === 'lp-mining' && <LPMiningDashboard />}
 
         {activeTab === 'ambassador' && <AmbassadorDashboard stakedBalance={stakedBalance} />}
 
