@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
 
-export default function AmbassadorDashboard() {
+export default function AmbassadorDashboard({ stakedBalance = '0' }) {
   const { address, isConnected } = useAccount();
   
   const [referralCode, setReferralCode] = useState('');
@@ -27,9 +27,11 @@ export default function AmbassadorDashboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [claimType, setClaimType] = useState('instant'); // 'instant' or 'gasless'
 
   // Commission rates by tier
   const tierRates = {
+    'Starter': { l1: 0, l2: 0, l3: 0, l4: 0, l5: 0 },
     'Cadet': { l1: 15, l2: 0, l3: 0, l4: 0, l5: 0 },
     'Captain': { l1: 15, l2: 12, l3: 0, l4: 0, l5: 0 },
     'Commander': { l1: 15, l2: 12, l3: 9, l4: 0, l5: 0 },
@@ -38,6 +40,23 @@ export default function AmbassadorDashboard() {
     'Platinum Sentinel': { l1: 15, l2: 12, l3: 9, l4: 6, l5: 3 },
     'Diamond Custodian': { l1: 15, l2: 12, l3: 9, l4: 6, l5: 3 }
   };
+
+  // Get badge tier based on staked balance
+  const getBadgeTier = useCallback(() => {
+    const staked = Number(stakedBalance || '0');
+    
+    if (staked >= 10e12) return { name: 'Diamond Custodian', emoji: '❇️', threshold: '≥10T AfroX' };
+    if (staked >= 1e12) return { name: 'Platinum Sentinel', emoji: '💠', threshold: '≥1T AfroX' };
+    if (staked >= 500e9) return { name: 'Marshal', emoji: '〽️', threshold: '≥500B AfroX' };
+    if (staked >= 100e9) return { name: 'General', emoji: '⭐', threshold: '≥100B AfroX' };
+    if (staked >= 50e9) return { name: 'Commander', emoji: '⚜️', threshold: '≥50B AfroX' };
+    if (staked >= 10e9) return { name: 'Captain', emoji: '🔱', threshold: '≥10B AfroX' };
+    if (staked >= 1e9) return { name: 'Cadet', emoji: '🔰', threshold: '≥1B AfroX' };
+    
+    return { name: 'Starter', emoji: '✳️', threshold: 'Stake ≥1B to unlock' };
+  }, [stakedBalance]);
+
+  const currentBadge = getBadgeTier();
 
   const loadAmbassadorData = useCallback(async () => {
     setLoading(true);
@@ -61,7 +80,7 @@ export default function AmbassadorDashboard() {
         totalEarned: 0,
         totalClaimed: 0,
         pendingCommissions: 0,
-        currentTier: 'Starter'
+        currentTier: currentBadge.name
       });
       
     } catch (error) {
@@ -69,7 +88,7 @@ export default function AmbassadorDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, currentBadge.name]);
 
   useEffect(() => {
     if (isConnected && address) {
@@ -88,8 +107,13 @@ export default function AmbassadorDashboard() {
     
     setLoading(true);
     try {
-      // TODO: Implement claim logic
-      alert('Claim functionality coming soon!');
+      if (claimType === 'instant') {
+        // TODO: Implement instant claim with gas payment
+        alert('Instant claim (you pay gas) - Coming soon!');
+      } else {
+        // TODO: Add to gasless claim queue
+        alert('Added to gasless claim queue! You will receive your rewards on the 7th of next month.');
+      }
     } catch (error) {
       console.error('Claim error:', error);
     } finally {
@@ -172,7 +196,10 @@ export default function AmbassadorDashboard() {
 
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Current Tier</div>
-          <div className="text-2xl font-bold text-orange-400 mt-1">{stats.currentTier}</div>
+          <div className="text-2xl font-bold text-orange-400 mt-1 flex items-center gap-2">
+            <span>{currentBadge.emoji}</span>
+            <span>{currentBadge.name}</span>
+          </div>
           <div className="text-xs text-gray-500 mt-1">Ambassador level</div>
         </motion.div>
       </div>
@@ -181,7 +208,7 @@ export default function AmbassadorDashboard() {
       <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mb-6" whileHover={cardGlow}>
         <h2 className="text-xl font-bold mb-4">Your Commission Rates</h2>
         <div className="grid grid-cols-5 gap-3">
-          {Object.entries(tierRates[stats.currentTier] || tierRates['Cadet']).map(([level, rate]) => (
+          {Object.entries(tierRates[currentBadge.name] || tierRates['Starter']).map(([level, rate]) => (
             <div key={level} className="text-center p-3 bg-gray-800 rounded">
               <div className="text-xs text-gray-400">{level.toUpperCase()}</div>
               <div className="text-lg font-bold text-orange-400 mt-1">{rate}%</div>
@@ -189,7 +216,7 @@ export default function AmbassadorDashboard() {
           ))}
         </div>
         <div className="mt-4 p-3 bg-gray-800/50 rounded text-sm text-gray-400">
-          <strong>⚠️ Eligibility Requirement:</strong> You must maintain ≥1B AfroX staked to earn commissions. If your stake drops below 1B when a commission is triggered, that commission is permanently forfeited.
+          <strong>⚠️ Eligibility Requirement:</strong> You must maintain the minimum staking requirement for your current badge tier to earn commissions at that tier level. If your stake drops below your tier&apos;s minimum when a commission is triggered, you will only earn from the levels available at your reduced tier.
         </div>
       </motion.div>
 
@@ -218,21 +245,67 @@ export default function AmbassadorDashboard() {
         
         {stats.pendingCommissions > 0 ? (
           <div>
-            <div className="flex items-center justify-between mb-4 p-4 bg-gray-800 rounded">
-              <div>
-                <div className="text-sm text-gray-400">Available to Claim</div>
-                <div className="text-2xl font-bold text-green-400">{prettyNumber(stats.pendingCommissions, 6)} AfroX</div>
+            <div className="mb-4 p-4 bg-gray-800 rounded">
+              <div className="text-sm text-gray-400 mb-2">Available to Claim</div>
+              <div className="text-2xl font-bold text-green-400 mb-4">{prettyNumber(stats.pendingCommissions, 6)} AfroX</div>
+              
+              {/* Claim Type Selection */}
+              <div className="mb-4">
+                <div className="text-sm text-gray-300 mb-2 font-semibold">Choose Claim Method:</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setClaimType('instant')}
+                    className={`p-3 rounded border-2 transition-all ${
+                      claimType === 'instant' 
+                        ? 'border-orange-500 bg-orange-500/10' 
+                        : 'border-gray-700 bg-gray-800'
+                    }`}
+                  >
+                    <div className="font-semibold text-sm">⚡ Instant Claim</div>
+                    <div className="text-xs text-gray-400 mt-1">Pay gas fee now</div>
+                  </button>
+                  
+                  <button
+                    onClick={() => setClaimType('gasless')}
+                    className={`p-3 rounded border-2 transition-all ${
+                      claimType === 'gasless' 
+                        ? 'border-green-500 bg-green-500/10' 
+                        : 'border-gray-700 bg-gray-800'
+                    }`}
+                  >
+                    <div className="font-semibold text-sm">🎁 Gasless Claim</div>
+                    <div className="text-xs text-gray-400 mt-1">Bulk distribution on 7th</div>
+                  </button>
+                </div>
               </div>
+
+              {claimType === 'gasless' && (
+                <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded text-sm text-gray-300">
+                  <strong>📅 Gasless Claim Schedule:</strong>
+                  <ul className="mt-2 space-y-1 text-xs">
+                    <li>• Click claim between <strong>1st-6th</strong> of any month</li>
+                    <li>• Your claim will be marked as &quot;Claimed - Pending Distribution&quot;</li>
+                    <li>• All pending claims distributed on the <strong>7th</strong> in one bulk transaction</li>
+                    <li>• System pays gas fees, saving you money! 💰</li>
+                  </ul>
+                </div>
+              )}
+              
               <button
                 onClick={claimCommissions}
                 disabled={loading}
-                className="px-6 py-3 rounded bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50"
+                className={`w-full py-3 rounded font-semibold disabled:opacity-50 ${
+                  claimType === 'instant'
+                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-green-600 hover:bg-green-700 text-white'
+                }`}
               >
-                {loading ? 'Processing...' : 'Claim Now'}
+                {loading ? 'Processing...' : claimType === 'instant' ? 'Claim Now (Pay Gas)' : 'Add to Claim Queue (Gasless)'}
               </button>
             </div>
+            
             <div className="text-xs text-gray-400">
-              ✓ You meet the minimum 1B AfroX staking requirement
+              ✓ You meet the minimum staking requirement for {currentBadge.name} tier ({currentBadge.threshold})
             </div>
           </div>
         ) : (
@@ -282,14 +355,19 @@ export default function AmbassadorDashboard() {
           
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">⚡ Commission Trigger</h3>
-            <p>Commissions are paid when your referred users claim their first 30 days of staking rewards. No lock period required.</p>
+            <p>Commissions become claimable 30 days after your referred user stakes tokens. The commission is triggered automatically after 30 days, regardless of whether the referred user has claimed their rewards or not. Stakers can choose to leave rewards in the system.</p>
           </div>
           
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">🎯 Eligibility Requirements</h3>
-            <p>You must maintain ≥1B AfroX staked at the moment commissions are triggered. If below 1B, that commission is forfeited.</p>
+            <p>You must maintain the minimum staking requirement for your badge tier when commissions are triggered. If your stake falls below your tier&apos;s minimum, you can only claim from the levels available at your reduced tier.</p>
           </div>
           
+          <div>
+            <h3 className="font-semibold text-orange-400 mb-2">💰 Gasless Claim Option</h3>
+            <p>Choose between instant claim (pay gas yourself) or gasless claim. With gasless, submit your claim between the 1st-6th of any month, and receive your rewards on the 7th via bulk distribution. The system pays all gas fees!</p>
+          </div>
+
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">🔒 Trust or Lose It</h3>
             <p>The system operates on trust. Keep your stake active to benefit from your network&apos;s growth.</p>
