@@ -789,10 +789,7 @@ export default function AfrodexStaking() {
           </div>
         )}
 
-        {activeTab === 'ambassador' && (
-          <div className="p-6 bg-gray-900 rounded">
-            <h2 className="text-xl font-bold">Ambassador Dashboard</h2>
-            <p className="text-gray-300 mt-2">Placeholder — referral & ambassador features will be added here.</p>
+           {activeTab === 'ambassador' && <AmbassadorDashboard />}
           </div>
         )}
 
