@@ -112,21 +112,49 @@ export default function GovernanceDashboard() {
 
   // Load governance data
   const loadGovernanceData = useCallback(async () => {
-    if (!address || !isConnected) return;
+    if (!address || !isConnected || !publicClient) return;
 
     setLoading(true);
     try {
-      // TODO: Replace with actual contract reads
+      // Fetch real staked balance from contract
+      const stakeInfo = await publicClient.readContract({
+        address: '0x...', // TODO: Add STAKING_ADDRESS here
+        abi: [
+          {
+            inputs: [{ name: 'user', type: 'address' }],
+            name: 'viewStakeInfoOf',
+            outputs: [
+              { name: 'stakeBalance', type: 'uint256' },
+              { name: 'rewardValue', type: 'uint256' },
+              { name: 'lastUnstakeTimestamp', type: 'uint256' },
+              { name: 'lastRewardTimestamp', type: 'uint256' }
+            ],
+            stateMutability: 'view',
+            type: 'function'
+          }
+        ],
+        functionName: 'viewStakeInfoOf',
+        args: [address]
+      });
+
+      const stakeBalRaw = stakeInfo[0] || 0n;
+      const stakedAmount = formatUnits(stakeBalRaw, 4); // Assuming 4 decimals
+      setStakedBalance(stakedAmount);
       
-      // For now, using placeholder data
-      const mockStaked = '150000000000'; // 150B AfroX
-      setStakedBalance(mockStaked);
-      
-      const tier = calculateTier(mockStaked);
+      const tier = calculateTier(stakedAmount);
       setUserTier(tier);
       setVotingPower(tier?.votingPower || 0);
 
-      // Load mock proposals
+      // Load proposals from contract (TODO: Replace with your governance contract)
+      // For now using mock data until governance contract is deployed
+      // Once deployed, fetch with:
+      // const proposalCount = await publicClient.readContract({
+      //   address: GOVERNANCE_ADDRESS,
+      //   abi: GOVERNANCE_ABI,
+      //   functionName: 'getProposalCount'
+      // });
+      // Then loop and fetch each proposal
+      
       setProposals([
         {
           id: 1,
@@ -186,10 +214,16 @@ export default function GovernanceDashboard() {
 
     } catch (error) {
       console.error('Error loading governance data:', error);
+      
+      // Fallback to zero values on error
+      setStakedBalance('0');
+      setUserTier(null);
+      setVotingPower(0);
+      setProposals([]);
     } finally {
       setLoading(false);
     }
-  }, [address, isConnected, calculateTier]);
+  }, [address, isConnected, publicClient, calculateTier]);
 
   useEffect(() => {
     loadGovernanceData();
