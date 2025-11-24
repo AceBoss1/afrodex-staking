@@ -24,6 +24,9 @@ const ERC20_ABI = [
   'function balanceOf(address) view returns (uint256)'
 ];
 
+// Your actual AfroX LP pair address
+const AFROX_WETH_PAIR = '0xEb10676a236e97E214787e6A72Af44C93639BA61';
+
 // Known DEX Factory addresses (add your specific DEXs)
 const DEX_FACTORIES = {
   uniswap: '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f',
@@ -226,40 +229,87 @@ export default function LPMiningDashboard() {
 
   // Load all LP data
   const loadLPData = useCallback(async () => {
-    if (!address || !isConnected) return;
+    if (!address || !isConnected || !publicClient) return;
 
     setLoading(true);
     try {
-      // TODO: Replace with your actual AfroX token address
-      const AFROX_ADDRESS = '0x...'; // Add your token address here
+      // Your AfroX-WETH pair on Uniswap V2
+      const knownPairs = [
+        { address: AFROX_WETH_PAIR, dex: 'Uniswap V2', name: 'AfroX-WETH' }
+      ];
 
-      // Method 1: Try fetching from The Graph (fastest)
-      const subgraphData = await fetchLPTokensFromSubgraph(address, AFROX_ADDRESS);
+      // Fetch LP balances directly from blockchain
+      const lpBalances = [];
+
+      for (const pair of knownPairs) {
+        try {
+          // Get LP token balance
+          const balance = await publicClient.readContract({
+            address: pair.address,
+            abi: PAIR_ABI,
+            functionName: 'balanceOf',
+            args: [address]
+          });
+
+          if (balance > 0n) {
+            // Get additional pair info
+            const [totalSupply, reserves, decimals, pairSymbol] = await Promise.all([
+              publicClient.readContract({
+                address: pair.address,
+                abi: PAIR_ABI,
+                functionName: 'totalSupply'
+              }),
+              publicClient.readContract({
+                address: pair.address,
+                abi: PAIR_ABI,
+                functionName: 'getReserves'
+              }),
+              publicClient.readContract({
+                address: pair.address,
+                abi: PAIR_ABI,
+                functionName: 'decimals'
+              }),
+              publicClient.readContract({
+                address: pair.address,
+                abi: PAIR_ABI,
+                functionName: 'symbol'
+              })
+            ]);
+
+            const balanceFormatted = formatUnits(balance, Number(decimals));
+            const totalSupplyFormatted = formatUnits(totalSupply, Number(decimals));
+            const poolShare = (Number(balanceFormatted) / Number(totalSupplyFormatted)) * 100;
+
+            lpBalances.push({
+              address: pair.address,
+              balance: balanceFormatted,
+              balanceRaw: balance,
+              pairName: pair.name,
+              symbol: pairSymbol,
+              decimals: Number(decimals),
+              dex: pair.dex,
+              totalSupply: totalSupplyFormatted,
+              poolShare: poolShare.toFixed(2),
+              reserves: {
+                reserve0: reserves[0],
+                reserve1: reserves[1]
+              }
+            });
+          }
+        } catch (err) {
+          console.error(`Error fetching LP data for ${pair.address}:`, err);
+        }
+      }
+
+      setLpTokens(lpBalances);
       
-      if (subgraphData.length > 0) {
-        setLpTokens(subgraphData.map(pos => ({
-          address: pos.pairAddress,
-          balance: formatUnits(pos.liquidityTokenBalance, 18),
-          pairName: pos.pairName,
-          dex: pos.dex,
-          reserves: pos.pair
-        })));
-      } else {
-        // Method 2: Fallback to direct blockchain queries
-        // You would need to maintain a list of known AfroX LP pair addresses
-        const knownPairs = [
-          { address: '0x...', dex: 'Uniswap' }, // AfroX-ETH
-          { address: '0x...', dex: 'SushiSwap' }, // AfroX-USDC
-          // Add more known pairs
-        ];
-        
-        const onChainBalances = await fetchLPBalancesOnChain(address, knownPairs);
-        setLpTokens(onChainBalances);
+      if (lpBalances.length > 0) {
+        setSelectedToken(lpBalances[0]);
       }
 
       // Load mock locked positions (TODO: Replace with contract reads)
       setLockedPositions([
-        // This will come from your smart contract
+        // This will come from your smart contract when deployed
       ]);
 
       // Load mock leaderboard (TODO: Replace with Supabase/contract data)
@@ -274,7 +324,7 @@ export default function LPMiningDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [address, isConnected, fetchLPTokensFromSubgraph, fetchLPBalancesOnChain]);
+  }, [address, isConnected, publicClient]);
 
   useEffect(() => {
     loadLPData();
