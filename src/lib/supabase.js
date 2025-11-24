@@ -1,10 +1,7 @@
-// Temporary placeholder supabase client to prevent build errors.
-// Replace later when Ambassador & Community dashboards are ready.
+// src/lib/supabase.js
+import { createClient } from '@supabase/supabase-js'
 
-export const supabase = {
-  from: () => ({
-    insert: async () => ({ error: null }),
-    update: async () => ({ error: null }),
-    select: async () => ({ data: [], error: null })
-  })
-};
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
