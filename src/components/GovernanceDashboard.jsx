@@ -5,6 +5,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { motion } from 'framer-motion';
 import { formatUnits, parseUnits } from 'viem';
+import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis';
+import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe } from '../lib/contracts';
 
 // Governance roles and their requirements
 const GOVERNANCE_TIERS = {
@@ -117,44 +119,36 @@ export default function GovernanceDashboard() {
     setLoading(true);
     try {
       // Fetch real staked balance from contract
-      const stakeInfo = await publicClient.readContract({
-        address: '0x...', // TODO: Add STAKING_ADDRESS here
-        abi: [
-          {
-            inputs: [{ name: 'user', type: 'address' }],
-            name: 'viewStakeInfoOf',
-            outputs: [
-              { name: 'stakeBalance', type: 'uint256' },
-              { name: 'rewardValue', type: 'uint256' },
-              { name: 'lastUnstakeTimestamp', type: 'uint256' },
-              { name: 'lastRewardTimestamp', type: 'uint256' }
-            ],
-            stateMutability: 'view',
-            type: 'function'
-          }
-        ],
+      const stakeInfo = await readContractSafe(publicClient, {
+        address: STAKING_ADDRESS,
+        abi: STAKING_ABI,
         functionName: 'viewStakeInfoOf',
-        args: [address]
+        args: [address],
       });
 
-      const stakeBalRaw = stakeInfo[0] || 0n;
-      const stakedAmount = formatUnits(stakeBalRaw, 4); // Assuming 4 decimals
-      setStakedBalance(stakedAmount);
+      let actualStaked = '0';
+      if (stakeInfo) {
+        const stakeBalRaw = stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n;
+        
+        // Get decimals
+        const decimalsRaw = await readContractSafe(publicClient, {
+          address: TOKEN_ADDRESS,
+          abi: AFROX_PROXY_ABI,
+          functionName: 'decimals',
+          args: [],
+        });
+        const decimals = decimalsRaw !== null ? Number(decimalsRaw) : 18;
+        
+        actualStaked = formatUnits(stakeBalRaw, decimals);
+      }
       
-      const tier = calculateTier(stakedAmount);
+      setStakedBalance(actualStaked);
+      
+      const tier = calculateTier(actualStaked);
       setUserTier(tier);
       setVotingPower(tier?.votingPower || 0);
 
-      // Load proposals from contract (TODO: Replace with your governance contract)
-      // For now using mock data until governance contract is deployed
-      // Once deployed, fetch with:
-      // const proposalCount = await publicClient.readContract({
-      //   address: GOVERNANCE_ADDRESS,
-      //   abi: GOVERNANCE_ABI,
-      //   functionName: 'getProposalCount'
-      // });
-      // Then loop and fetch each proposal
-      
+      // Load mock proposals
       setProposals([
         {
           id: 1,
@@ -214,12 +208,6 @@ export default function GovernanceDashboard() {
 
     } catch (error) {
       console.error('Error loading governance data:', error);
-      
-      // Fallback to zero values on error
-      setStakedBalance('0');
-      setUserTier(null);
-      setVotingPower(0);
-      setProposals([]);
     } finally {
       setLoading(false);
     }
