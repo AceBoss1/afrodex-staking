@@ -5,8 +5,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { motion } from 'framer-motion';
 import { formatUnits, parseUnits } from 'viem';
-import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis';
-import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe } from '../lib/contracts';
+import { STAKING_ABI, STAKING_ADDRESS } from '../lib/contracts';
+import { readContractSafe } from '../lib/contracts';
+import { supabase } from '../lib/supabaseClient';
 
 // Governance roles and their requirements
 const GOVERNANCE_TIERS = {
@@ -114,104 +115,89 @@ export default function GovernanceDashboard() {
 
   // Load governance data
   const loadGovernanceData = useCallback(async () => {
-    if (!address || !isConnected || !publicClient) return;
+    if (!address || !isConnected) return;
 
     setLoading(true);
     try {
       // Fetch real staked balance from contract
-      const stakeInfo = await readContractSafe(publicClient, {
-        address: STAKING_ADDRESS,
-        abi: STAKING_ABI,
-        functionName: 'viewStakeInfoOf',
-        args: [address],
-      });
-
-      let actualStaked = '0';
-      if (stakeInfo) {
-        const stakeBalRaw = stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n;
-        
-        // Get decimals
-        const decimalsRaw = await readContractSafe(publicClient, {
-          address: TOKEN_ADDRESS,
-          abi: AFROX_PROXY_ABI,
-          functionName: 'decimals',
-          args: [],
+      if (publicClient) {
+        const stakeInfo = await readContractSafe(publicClient, {
+          address: STAKING_ADDRESS,
+          abi: STAKING_ABI,
+          functionName: 'viewStakeInfoOf',
+          args: [address],
         });
-        const decimals = decimalsRaw !== null ? Number(decimalsRaw) : 18;
-        
-        actualStaked = formatUnits(stakeBalRaw, decimals);
-      }
-      
-      setStakedBalance(actualStaked);
-      
-      const tier = calculateTier(actualStaked);
-      setUserTier(tier);
-      setVotingPower(tier?.votingPower || 0);
 
-      // Load mock proposals
-      setProposals([
-        {
-          id: 1,
-          title: 'Increase Staking Rewards by 2%',
-          description: 'Proposal to increase base staking rewards from 0.6% to 0.8% daily to attract more stakers and increase liquidity.',
-          proposer: '0x1234...5678',
-          proposerTier: 'Marshal',
-          category: 'rewards',
-          status: PROPOSAL_STATUS.ACTIVE,
-          votesFor: 15420000,
-          votesAgainst: 3240000,
-          totalVotes: 18660000,
-          quorum: 10000000,
-          startDate: '2025-01-15',
-          endDate: '2025-01-22',
-          daysRemaining: 3,
-          hasVoted: false,
-          userVote: null
-        },
-        {
-          id: 2,
-          title: 'Add USDC-AfroX LP Mining Pool',
-          description: 'Create a new LP mining pool for USDC-AfroX pairs with 50% APY rewards to increase stablecoin liquidity.',
-          proposer: '0x8765...4321',
-          proposerTier: 'Platinum Sentinel',
-          category: 'liquidity',
-          status: PROPOSAL_STATUS.ACTIVE,
-          votesFor: 22100000,
-          votesAgainst: 1800000,
-          totalVotes: 23900000,
-          quorum: 10000000,
-          startDate: '2025-01-14',
-          endDate: '2025-01-21',
-          daysRemaining: 2,
-          hasVoted: true,
-          userVote: 'for'
-        },
-        {
-          id: 3,
-          title: 'Reduce Early Unlock Penalty to 10%',
-          description: 'Lower the early unlock penalty from 15% to 10% to provide more flexibility for LP miners who need emergency liquidity.',
-          proposer: '0xabcd...ef01',
-          proposerTier: 'General',
-          category: 'parameters',
-          status: PROPOSAL_STATUS.PASSED,
-          votesFor: 18900000,
-          votesAgainst: 5200000,
-          totalVotes: 24100000,
-          quorum: 10000000,
-          startDate: '2025-01-08',
-          endDate: '2025-01-15',
-          daysRemaining: 0,
-          hasVoted: true,
-          userVote: 'for'
+        if (stakeInfo) {
+          const stakeBalRaw = stakeInfo.stakeBalance ?? stakeInfo[0] ?? 0n;
+          const stakeBalHuman = (Number(stakeBalRaw) / 1e4).toString(); // Assuming 4 decimals
+          setStakedBalance(stakeBalHuman);
+          
+          // Calculate tier and voting power
+          const tier = calculateTier(stakeBalHuman);
+          setUserTier(tier);
+          setVotingPower(tier?.votingPower || 0);
         }
-      ]);
+      }
+
+      // Load proposals from Supabase
+      const { data: proposalsData, error } = await supabase
+        .from('governance_proposals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (proposalsData && !error) {
+        // Format proposals for display
+        const formattedProposals = proposalsData.map(p => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          proposer: p.proposer_address,
+          proposerTier: calculateTier(p.proposer_stake_amount)?.name || 'Unknown',
+          category: p.category || 'general',
+          status: p.status,
+          votesFor: Number(p.votes_for || 0),
+          votesAgainst: Number(p.votes_against || 0),
+          totalVotes: Number(p.votes_for || 0) + Number(p.votes_against || 0),
+          quorum: Number(p.quorum_required || 10000000),
+          startDate: new Date(p.created_at).toLocaleDateString(),
+          endDate: new Date(p.ends_at).toLocaleDateString(),
+          daysRemaining: Math.max(0, Math.ceil((new Date(p.ends_at) - new Date()) / (1000 * 60 * 60 * 24))),
+          hasVoted: false, // TODO: Check if user has voted
+          userVote: null
+        }));
+
+        setProposals(formattedProposals);
+      } else {
+        // Use sample proposals if none exist
+        setProposals([
+          {
+            id: 1,
+            title: 'Increase Staking Rewards by 2%',
+            description: 'Proposal to increase base staking rewards from 0.6% to 0.8% daily to attract more stakers.',
+            proposer: address?.slice(0, 10) + '...' || '0x1234...5678',
+            proposerTier: userTier?.name || 'Marshal',
+            category: 'rewards',
+            status: PROPOSAL_STATUS.ACTIVE,
+            votesFor: 15420000,
+            votesAgainst: 3240000,
+            totalVotes: 18660000,
+            quorum: 10000000,
+            startDate: new Date().toLocaleDateString(),
+            endDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+            daysRemaining: 3,
+            hasVoted: false,
+            userVote: null
+          }
+        ]);
+      }
 
     } catch (error) {
       console.error('Error loading governance data:', error);
     } finally {
       setLoading(false);
     }
-  }, [address, isConnected, publicClient, calculateTier]);
+  }, [address, isConnected, publicClient, calculateTier, userTier]);
 
   useEffect(() => {
     loadGovernanceData();
