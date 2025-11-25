@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { motion } from 'framer-motion';
 import { formatUnits, parseUnits } from 'viem';
+import { getAfroxPriceUSD, formatUSD, calculateUSDValue } from '../lib/priceUtils';
 
 // LP Pair ABI for reading balances
 const PAIR_ABI = [
@@ -23,9 +24,6 @@ const ERC20_ABI = [
   'function decimals() view returns (uint8)',
   'function balanceOf(address) view returns (uint256)'
 ];
-
-// Your actual AfroX LP pair address
-const AFROX_WETH_PAIR = '0xEb10676a236e97E214787e6A72Af44C93639BA61';
 
 // Known DEX Factory addresses (add your specific DEXs)
 const DEX_FACTORIES = {
@@ -53,6 +51,11 @@ export default function LPMiningDashboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeView, setActiveView] = useState('lock'); // 'lock' or 'positions'
+  const [afroxPrice, setAfroxPrice] = useState(null);
+
+  // Your specific AfroX-WETH Uniswap V2 pair
+  const AFROX_WETH_PAIR = '0xEb10676a236e97E214787e6A72Af44C93639BA61';
+  const AFROX_TOKEN = '0xYourAfroXTokenAddress'; // TODO: Add your token address
 
   // Lock duration options with APY
   const lockOptions = [
@@ -229,102 +232,77 @@ export default function LPMiningDashboard() {
 
   // Load all LP data
   const loadLPData = useCallback(async () => {
-    if (!address || !isConnected || !publicClient) return;
+    if (!address || !isConnected) return;
 
     setLoading(true);
     try {
-      // Your AfroX-WETH pair on Uniswap V2
+      // Fetch AfroX price first
+      const priceData = await getAfroxPriceUSD(publicClient, AFROX_WETH_PAIR);
+      if (priceData) {
+        setAfroxPrice(priceData.priceUSD);
+      }
+
+      // Known AfroX LP pairs (add your specific pair)
       const knownPairs = [
-        { address: AFROX_WETH_PAIR, dex: 'Uniswap V2', name: 'AfroX-WETH' }
+        { 
+          address: AFROX_WETH_PAIR, 
+          dex: 'Uniswap V2',
+          token0: AFROX_TOKEN,
+          token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
+          name: 'AfroX-WETH'
+        }
       ];
 
-      // Fetch LP balances directly from blockchain
-      const lpBalances = [];
+      // Fetch balances directly from pair contract
+      const onChainBalances = await fetchLPBalancesOnChain(address, knownPairs);
+      
+      if (onChainBalances.length > 0) {
+        // Calculate USD values
+        const balancesWithUSD = onChainBalances.map(balance => {
+          // Get AfroX amount from reserves
+          const isAfroXToken0 = balance.token0.toLowerCase() === AFROX_TOKEN.toLowerCase();
+          const afroxReserve = isAfroXToken0 ? balance.reserves.reserve0 : balance.reserves.reserve1;
+          const wethReserve = isAfroXToken0 ? balance.reserves.reserve1 : balance.reserves.reserve0;
+          
+          // Calculate user's share
+          const userShare = Number(balance.balance) / Number(balance.totalSupply);
+          const userAfroX = (Number(afroxReserve) / 1e18) * userShare; // Assuming 18 decimals
+          const userWETH = (Number(wethReserve) / 1e18) * userShare;
+          
+          // Calculate USD value
+          const afroxValueUSD = priceData ? userAfroX * priceData.priceUSD : 0;
+          const wethValueUSD = userWETH * 3000; // Approximate ETH price
+          const totalValueUSD = afroxValueUSD + wethValueUSD;
 
-      for (const pair of knownPairs) {
-        try {
-          // Get LP token balance
-          const balance = await publicClient.readContract({
-            address: pair.address,
-            abi: PAIR_ABI,
-            functionName: 'balanceOf',
-            args: [address]
-          });
-
-          if (balance > 0n) {
-            // Get additional pair info
-            const [totalSupply, reserves, decimals, pairSymbol] = await Promise.all([
-              publicClient.readContract({
-                address: pair.address,
-                abi: PAIR_ABI,
-                functionName: 'totalSupply'
-              }),
-              publicClient.readContract({
-                address: pair.address,
-                abi: PAIR_ABI,
-                functionName: 'getReserves'
-              }),
-              publicClient.readContract({
-                address: pair.address,
-                abi: PAIR_ABI,
-                functionName: 'decimals'
-              }),
-              publicClient.readContract({
-                address: pair.address,
-                abi: PAIR_ABI,
-                functionName: 'symbol'
-              })
-            ]);
-
-            const balanceFormatted = formatUnits(balance, Number(decimals));
-            const totalSupplyFormatted = formatUnits(totalSupply, Number(decimals));
-            const poolShare = (Number(balanceFormatted) / Number(totalSupplyFormatted)) * 100;
-
-            lpBalances.push({
-              address: pair.address,
-              balance: balanceFormatted,
-              balanceRaw: balance,
-              pairName: pair.name,
-              symbol: pairSymbol,
-              decimals: Number(decimals),
-              dex: pair.dex,
-              totalSupply: totalSupplyFormatted,
-              poolShare: poolShare.toFixed(2),
-              reserves: {
-                reserve0: reserves[0],
-                reserve1: reserves[1]
-              }
-            });
-          }
-        } catch (err) {
-          console.error(`Error fetching LP data for ${pair.address}:`, err);
+          return {
+            ...balance,
+            userAfroX,
+            userWETH,
+            afroxValueUSD,
+            wethValueUSD,
+            totalValueUSD,
+            shareOfPool: userShare * 100
+          };
+        });
+        
+        setLpTokens(balancesWithUSD);
+      } else {
+        // Fallback: Try The Graph subgraphs
+        const subgraphData = await fetchLPTokensFromSubgraph(address, AFROX_TOKEN);
+        if (subgraphData.length > 0) {
+          setLpTokens(subgraphData);
         }
       }
 
-      setLpTokens(lpBalances);
-      
-      if (lpBalances.length > 0) {
-        setSelectedToken(lpBalances[0]);
-      }
-
-      // Load mock locked positions (TODO: Replace with contract reads)
-      setLockedPositions([
-        // This will come from your smart contract when deployed
-      ]);
-
-      // Load mock leaderboard (TODO: Replace with Supabase/contract data)
-      setLeaderboard([
-        { rank: 1, wallet: '0x1234...5678', totalLP: '500000', rewards: '45000' },
-        { rank: 2, wallet: '0x8765...4321', totalLP: '350000', rewards: '28000' },
-        { rank: 3, wallet: '0xabcd...ef01', totalLP: '250000', rewards: '19500' }
-      ]);
+      // Load positions from Supabase or contract
+      // TODO: Implement when smart contract is ready
 
     } catch (error) {
       console.error('Error loading LP data:', error);
     } finally {
       setLoading(false);
     }
-  }, [address, isConnected, publicClient]);
+  }, [address, isConnected, publicClient, fetchLPTokensFromSubgraph, fetchLPBalancesOnChain]);
 
   useEffect(() => {
     loadLPData();
@@ -426,29 +404,51 @@ export default function LPMiningDashboard() {
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">LP Balance</div>
           <div className="text-2xl font-bold text-orange-400 mt-1">
-            {lpTokens.length > 0 ? `${prettyNumber(lpTokens[0]?.balance || 0)} LP` : '0 LP'}
+            {lpTokens.length > 0 ? `${prettyNumber(lpTokens[0]?.balance || 0, 6)} LP` : '0 LP'}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Available to lock</div>
+          <div className="text-xs text-gray-500 mt-1">
+            {lpTokens.length > 0 && lpTokens[0]?.totalValueUSD ? 
+              `≈ ${formatUSD(lpTokens[0].totalValueUSD)}` : 
+              'Available to lock'}
+          </div>
         </motion.div>
 
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
-          <div className="text-sm text-gray-400">Total Locked</div>
+          <div className="text-sm text-gray-400">Deposited AfroX</div>
           <div className="text-2xl font-bold text-blue-400 mt-1">
-            {prettyNumber(lockedPositions.reduce((sum, pos) => sum + Number(pos.amount || 0), 0))} LP
+            {lpTokens.length > 0 && lpTokens[0]?.userAfroX ? 
+              `${prettyNumber(lpTokens[0].userAfroX)} AfroX` : 
+              '0 AfroX'}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Your locked positions</div>
+          <div className="text-xs text-gray-500 mt-1">
+            {lpTokens.length > 0 && lpTokens[0]?.afroxValueUSD ? 
+              `≈ ${formatUSD(lpTokens[0].afroxValueUSD)}` : 
+              'Your AfroX in pool'}
+          </div>
         </motion.div>
 
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
-          <div className="text-sm text-gray-400">Total Rewards</div>
-          <div className="text-2xl font-bold text-green-400 mt-1">0 AfroX</div>
-          <div className="text-xs text-gray-500 mt-1">Lifetime earnings</div>
+          <div className="text-sm text-gray-400">Deposited WETH</div>
+          <div className="text-2xl font-bold text-green-400 mt-1">
+            {lpTokens.length > 0 && lpTokens[0]?.userWETH ? 
+              `${lpTokens[0].userWETH.toFixed(4)} WETH` : 
+              '0 WETH'}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {lpTokens.length > 0 && lpTokens[0]?.wethValueUSD ? 
+              `≈ ${formatUSD(lpTokens[0].wethValueUSD)}` : 
+              'Your WETH in pool'}
+          </div>
         </motion.div>
 
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
-          <div className="text-sm text-gray-400">Active Locks</div>
-          <div className="text-2xl font-bold text-purple-400 mt-1">{lockedPositions.length}</div>
-          <div className="text-xs text-gray-500 mt-1">Locked positions</div>
+          <div className="text-sm text-gray-400">Share of Pool</div>
+          <div className="text-2xl font-bold text-purple-400 mt-1">
+            {lpTokens.length > 0 && lpTokens[0]?.shareOfPool ? 
+              `${lpTokens[0].shareOfPool.toFixed(2)}%` : 
+              '0%'}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">Your pool ownership</div>
         </motion.div>
       </div>
 
