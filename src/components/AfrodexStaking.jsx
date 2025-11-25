@@ -1,4 +1,5 @@
-// src/components/AfrodexStaking.jsx - PART 1 of 2
+// src/components/AfrodexStaking.jsx - FIXED VERSION
+// FIXED: Badge tier thresholds now correctly compare against human-readable staked balance
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,6 +26,19 @@ const DAILY_RATE_DEC = Number(REWARD_RATE) / 10000;
 const BONUS_DAILY_DEC = Number(BONUS_RATE) / 10000;
 const FIRST_30_DAYS = 30;
 const REMAINING_DAYS = 365 - 30;
+
+// FIXED: Badge tier thresholds - these are in HUMAN READABLE format (after dividing by decimals)
+// So 1B AfroX staked = 1,000,000,000 in human readable format
+const BADGE_TIERS = [
+  { name: 'Diamond Custodian', emoji: '❇️', minStake: 10e12, threshold: '≥10T AfroX' },
+  { name: 'Platinum Sentinel', emoji: '💠', minStake: 1e12, threshold: '≥1T AfroX' },
+  { name: 'Marshal', emoji: '〽️', minStake: 500e9, threshold: '≥500B AfroX' },
+  { name: 'General', emoji: '⭐', minStake: 100e9, threshold: '≥100B AfroX' },
+  { name: 'Commander', emoji: '⚜️', minStake: 50e9, threshold: '≥50B AfroX' },
+  { name: 'Captain', emoji: '🔱', minStake: 10e9, threshold: '≥10B AfroX' },
+  { name: 'Cadet', emoji: '🔰', minStake: 1e9, threshold: '≥1B AfroX' },
+  { name: 'Starter', emoji: '✳️', minStake: 0, threshold: 'Stake to unlock' }
+];
 
 export default function AfrodexStaking() {
   const { address, isConnected } = useAccount();
@@ -221,18 +235,19 @@ export default function AfrodexStaking() {
     return { daily, monthly, yearly };
   }, [stakedBalance, stakedDays]);
 
+  // FIXED: Badge tier calculation - now properly compares against human-readable staked balance
   const getBadgeTier = useCallback(() => {
     const staked = Number(stakedBalance || '0');
     
-    if (staked >= 10e12) return { name: 'Diamond Custodian', emoji: '❇️', threshold: '≥10T AfroX' };
-    if (staked >= 1e12) return { name: 'Platinum Sentinel', emoji: '💠', threshold: '≥1T AfroX' };
-    if (staked >= 500e9) return { name: 'Marshal', emoji: '〽️', threshold: '≥500B AfroX' };
-    if (staked >= 100e9) return { name: 'General', emoji: '⭐', threshold: '≥100B AfroX' };
-    if (staked >= 50e9) return { name: 'Commander', emoji: '⚜️', threshold: '≥50B AfroX' };
-    if (staked >= 10e9) return { name: 'Captain', emoji: '🔱', threshold: '≥10B AfroX' };
-    if (staked >= 1e9) return { name: 'Cadet', emoji: '🔰', threshold: '≥1B AfroX' };
+    // Find the first tier where staked amount meets the minimum
+    for (const tier of BADGE_TIERS) {
+      if (staked >= tier.minStake) {
+        return tier;
+      }
+    }
     
-    return { name: 'Starter', emoji: '✳️', threshold: 'Stake to unlock' };
+    // Fallback to Starter
+    return BADGE_TIERS[BADGE_TIERS.length - 1];
   }, [stakedBalance]);
 
   const projections = useMemo(() => calcProjections(stakedBalance), [calcProjections, stakedBalance]);
@@ -359,9 +374,6 @@ export default function AfrodexStaking() {
       setLoading(false);
     }
   }
-
-  // CONTINUED IN PART 2...
-// CONTINUED FROM PART 1...
 
   async function doUnstake(humanAmount) {
     try {
@@ -570,15 +582,21 @@ export default function AfrodexStaking() {
                 <div className="text-xs text-gray-400 mt-2">Last unstake: {lastUnstakeTs ? new Date(lastUnstakeTs * 1000).toLocaleString() : '—'}</div>
               </motion.div>
 
+              {/* FIXED: Badge Tier Card - Now shows correctly */}
               <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10 flex flex-col justify-between" whileHover={{ ...cardGlow }}>
                 <div>
                   <div className="text-sm text-gray-300">Badge Tier</div>
                   <div className="text-2xl font-semibold text-orange-300 flex items-center gap-2 mt-1">
-                    <span>{badgeTier.emoji}</span>
+                    <span className="text-3xl">{badgeTier.emoji}</span>
                     <span>{badgeTier.name}</span>
                   </div>
                 </div>
-                <div className="mt-3 text-xs text-gray-300 font-semibold">{badgeTier.threshold}</div>
+                <div className="mt-3">
+                  <div className="text-xs text-gray-300 font-semibold">{badgeTier.threshold}</div>
+                  <div className="text-[10px] text-gray-500 mt-1">
+                    Staked: {prettyNumber(stakedBalance)} AfroX
+                  </div>
+                </div>
               </motion.div>
             </section>
 
@@ -641,7 +659,39 @@ export default function AfrodexStaking() {
               </motion.div>
             </section>
 
-            {/* Rest of staking UI continues... */}
+            {/* Reward Projections */}
+            <section className="mb-6">
+              <motion.div className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10" whileHover={{ ...cardGlow }}>
+                <h2 className="text-xl font-bold mb-4">Reward Projections</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-gray-800 rounded-xl text-center">
+                    <div className="text-sm text-gray-400">Daily</div>
+                    <div className="text-xl font-bold text-green-400 mt-1">{prettyNumber(projections.daily)} AfroX</div>
+                    {afroxPrice && (
+                      <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(projections.daily, afroxPrice))}</div>
+                    )}
+                  </div>
+                  <div className="p-4 bg-gray-800 rounded-xl text-center">
+                    <div className="text-sm text-gray-400">Monthly</div>
+                    <div className="text-xl font-bold text-green-400 mt-1">{prettyNumber(projections.monthly)} AfroX</div>
+                    {afroxPrice && (
+                      <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(projections.monthly, afroxPrice))}</div>
+                    )}
+                  </div>
+                  <div className="p-4 bg-gray-800 rounded-xl text-center">
+                    <div className="text-sm text-gray-400">Yearly</div>
+                    <div className="text-xl font-bold text-green-400 mt-1">{prettyNumber(projections.yearly)} AfroX</div>
+                    {afroxPrice && (
+                      <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(projections.yearly, afroxPrice))}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 text-xs text-gray-500 text-center">
+                  Base: 0.6%/day {stakedDays >= 30 && '+ 0.06% bonus'} | Days staked: {stakedDays}
+                </div>
+              </motion.div>
+            </section>
+
             <div className="mt-4">
               <div className="p-4 bg-[#0b0b0b] rounded border border-gray-800 text-sm text-gray-300">
                 ⚠️ <strong>Important Disclaimer:</strong> By using this platform you confirm you are of legal age, live in a jurisdiction where staking crypto is permitted, and accept all liability and risk.
