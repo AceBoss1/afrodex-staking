@@ -53,9 +53,9 @@ export default function LPMiningDashboard() {
   const [activeView, setActiveView] = useState('lock'); // 'lock' or 'positions'
   const [afroxPrice, setAfroxPrice] = useState(null);
 
-  // Your specific AfroX-WETH Uniswap V2 pair
-  const AFROX_WETH_PAIR = '0xEb10676a236e97E214787e6A72Af44C93639BA61';
-  const AFROX_TOKEN = '0xYourAfroXTokenAddress'; // TODO: Add your token address
+  // Get from environment variables
+  const AFROX_WETH_PAIR = process.env.NEXT_PUBLIC_LP_PAIR_ADDRESS;
+  const AFROX_TOKEN = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS;
 
   // Lock duration options with APY
   const lockOptions = [
