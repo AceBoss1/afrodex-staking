@@ -1,7 +1,7 @@
 // src/components/LPMiningDashboard.jsx
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { motion } from 'framer-motion';
 import { formatUnits, parseUnits } from 'viem';
@@ -57,14 +57,14 @@ export default function LPMiningDashboard() {
   const AFROX_WETH_PAIR = process.env.NEXT_PUBLIC_LP_PAIR_ADDRESS;
   const AFROX_TOKEN = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS;
 
-  // Lock duration options with APY
-  const lockOptions = [
-    { days: 30, label: '30 Days', apy: 10, instantBonus: 5, miningBonus: 5 },
-    { days: 60, label: '60 Days', apy: 17, instantBonus: 5, miningBonus: 12 },
-    { days: 90, label: '90 Days', apy: 25, instantBonus: 5, miningBonus: 20 },
-    { days: 180, label: '180 Days', apy: 72, instantBonus: 5, miningBonus: 67 },
-    { days: 365, label: '365 Days', apy: 155, instantBonus: 5, miningBonus: 150 }
-  ];
+// Lock duration options with APY (wrapped in useMemo)
+const lockOptions = useMemo(() => [
+  { days: 30, label: '30 Days', apy: 10, instantBonus: 5, miningBonus: 5 },
+  { days: 60, label: '60 Days', apy: 17, instantBonus: 5, miningBonus: 12 },
+  { days: 90, label: '90 Days', apy: 25, instantBonus: 5, miningBonus: 20 },
+  { days: 180, label: '180 Days', apy: 72, instantBonus: 5, miningBonus: 67 },
+  { days: 365, label: '365 Days', apy: 155, instantBonus: 5, miningBonus: 150 }
+], []);
 
   // Fetch LP tokens from The Graph
   const fetchLPTokensFromSubgraph = useCallback(async (userAddress, afroxAddress) => {
@@ -302,7 +302,7 @@ export default function LPMiningDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [address, isConnected, publicClient, fetchLPTokensFromSubgraph, fetchLPBalancesOnChain]);
+}, [address, isConnected, publicClient, fetchLPTokensFromSubgraph, fetchLPBalancesOnChain, AFROX_TOKEN, AFROX_WETH_PAIR]);
 
   useEffect(() => {
     loadLPData();
