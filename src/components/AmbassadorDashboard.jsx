@@ -8,10 +8,12 @@ import {
   generateReferralCode, 
   createReferralLink, 
   getAmbassadorStats,
-  getAmbassadorLeaderboard 
+  getAmbassadorLeaderboard,
+  getReferralTree
 } from '../lib/supabaseClient';
 import { readContractSafe } from '../lib/contracts';
 import { STAKING_ABI, STAKING_ADDRESS } from '../lib/contracts';
+import { getAfroxPriceUSD, formatUSD, calculateUSDValue } from '../lib/priceUtils';
 
 export default function AmbassadorDashboard() {
   const { address, isConnected } = useAccount();
@@ -37,9 +39,11 @@ export default function AmbassadorDashboard() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [afroxPrice, setAfroxPrice] = useState(null);
 
-  // Commission rates by tier
+  // Commission rates by tier (FIXED: Remove MINSTAKE display)
   const tierRates = {
+    'Starter': { l1: 0, l2: 0, l3: 0, l4: 0, l5: 0, minStake: 0 },
     'Cadet': { l1: 15, l2: 0, l3: 0, l4: 0, l5: 0, minStake: 1e9 },
     'Captain': { l1: 15, l2: 12, l3: 0, l4: 0, l5: 0, minStake: 10e9 },
     'Commander': { l1: 15, l2: 12, l3: 9, l4: 0, l5: 0, minStake: 50e9 },
@@ -67,12 +71,18 @@ export default function AmbassadorDashboard() {
 
     setLoading(true);
     try {
-      // 1. Generate referral code (first 8 chars after 0x)
+      // 1. Fetch AfroX price
+      const priceData = await getAfroxPriceUSD(publicClient, process.env.NEXT_PUBLIC_LP_PAIR_ADDRESS);
+      if (priceData) {
+        setAfroxPrice(priceData.priceUSD);
+      }
+
+      // 2. Generate referral code (first 8 chars after 0x)
       const code = generateReferralCode(address);
       setReferralCode(code);
       setReferralLink(createReferralLink(code));
       
-      // 2. Get staked balance from contract
+      // 3. Get staked balance from contract
       if (publicClient) {
         try {
           const stakeInfo = await readContractSafe(publicClient, {
@@ -96,7 +106,7 @@ export default function AmbassadorDashboard() {
         }
       }
       
-      // 3. Load stats from Supabase
+      // 4. Load stats from Supabase
       const ambassadorStats = await getAmbassadorStats(address);
       if (ambassadorStats) {
         setStats(prev => ({
@@ -105,9 +115,13 @@ export default function AmbassadorDashboard() {
         }));
       }
       
-      // 4. Load leaderboard
+      // 5. Load leaderboard
       const leaderboardData = await getAmbassadorLeaderboard(100);
       setLeaderboard(leaderboardData);
+      
+      // 6. Load referral tree
+      const treeData = await getReferralTree(address, 5);
+      setReferralTree(treeData);
       
     } catch (error) {
       console.error('Error loading ambassador data:', error);
@@ -206,12 +220,18 @@ export default function AmbassadorDashboard() {
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Total Earned</div>
           <div className="text-2xl font-bold text-green-400 mt-1">{prettyNumber(stats.totalEarned)} AfroX</div>
+          {afroxPrice && (
+            <div className="text-xs text-gray-500 mt-1">≈ {formatUSD(calculateUSDValue(stats.totalEarned, afroxPrice))}</div>
+          )}
           <div className="text-xs text-gray-500 mt-1">Lifetime earnings</div>
         </motion.div>
 
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Pending Claims</div>
           <div className="text-2xl font-bold text-yellow-400 mt-1">{prettyNumber(stats.pendingCommissions)} AfroX</div>
+          {afroxPrice && (
+            <div className="text-xs text-gray-500 mt-1">≈ {formatUSD(calculateUSDValue(stats.pendingCommissions, afroxPrice))}</div>
+          )}
           <div className="text-xs text-gray-500 mt-1">Ready to claim</div>
         </motion.div>
 
@@ -226,7 +246,7 @@ export default function AmbassadorDashboard() {
       <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mb-6" whileHover={cardGlow}>
         <h2 className="text-xl font-bold mb-4">Your Commission Rates</h2>
         <div className="grid grid-cols-5 gap-3">
-          {Object.entries(tierRates[stats.currentTier] || tierRates['Cadet']).map(([level, rate]) => (
+          {Object.entries(tierRates[stats.currentTier] || tierRates['Starter']).filter(([key]) => key !== 'minStake').map(([level, rate]) => (
             <div key={level} className="text-center p-3 bg-gray-800 rounded">
               <div className="text-xs text-gray-400">{level.toUpperCase()}</div>
               <div className="text-lg font-bold text-orange-400 mt-1">{rate}%</div>
@@ -241,7 +261,7 @@ export default function AmbassadorDashboard() {
       {/* Referral Network Breakdown */}
       <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mb-6" whileHover={cardGlow}>
         <h2 className="text-xl font-bold mb-4">Referral Network Breakdown</h2>
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-5 gap-3 mb-4">
           {[
             { label: 'Level 1 (L1)', count: stats.l1, color: 'text-blue-400' },
             { label: 'Level 2 (L2)', count: stats.l2, color: 'text-green-400' },
@@ -255,6 +275,35 @@ export default function AmbassadorDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Referral Tree Visualization */}
+        {referralTree.length > 0 && (
+          <div className="mt-6 p-4 bg-gray-800 rounded">
+            <h3 className="text-sm font-semibold text-orange-400 mb-3">Your Referral Network</h3>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {referralTree.map((ref, index) => (
+                <div key={index} className="flex items-center justify-between text-xs p-2 bg-gray-700/50 rounded">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold ${
+                      ref.level === 1 ? 'text-blue-400' :
+                      ref.level === 2 ? 'text-green-400' :
+                      ref.level === 3 ? 'text-yellow-400' :
+                      ref.level === 4 ? 'text-orange-400' : 'text-red-400'
+                    }`}>L{ref.level}</span>
+                    <span className="text-gray-300">{ref.referee_address.slice(0, 6)}...{ref.referee_address.slice(-4)}</span>
+                  </div>
+                  <span className="text-gray-500">{new Date(ref.created_at).toLocaleDateString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {referralTree.length === 0 && (
+          <div className="mt-6 p-4 bg-gray-800 rounded text-center text-gray-400 text-sm">
+            No referrals yet. Share your referral link to start building your network!
+          </div>
+        )}
       </motion.div>
 
       {/* Claim Section */}
