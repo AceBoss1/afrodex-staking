@@ -11,6 +11,7 @@ import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } f
 import AmbassadorDashboard from './AmbassadorDashboard';
 import LPMiningDashboard from './LPMiningDashboard';
 import GovernanceDashboard from './GovernanceDashboard';
+import { getAfroxPriceUSD, formatUSD, calculateUSDValue } from '../lib/priceUtils';
 
 const TOKEN_LOGO = '/afrodex_token.png';
 const DEFAULT_DECIMALS = 4;
@@ -48,6 +49,7 @@ export default function AfrodexStaking() {
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
+  const [afroxPrice, setAfroxPrice] = useState(null);
 
   const [activeTab, setActiveTab] = useState('staking');
 
@@ -102,6 +104,12 @@ export default function AfrodexStaking() {
     if (!publicClient) return;
 
     try {
+      // Fetch AfroX price
+      const priceData = await getAfroxPriceUSD(publicClient, process.env.NEXT_PUBLIC_LP_PAIR_ADDRESS);
+      if (priceData) {
+        setAfroxPrice(priceData.priceUSD);
+      }
+
       const decRaw = await readContractSafe(publicClient, {
         address: TOKEN_ADDRESS,
         abi: AFROX_PROXY_ABI,
@@ -352,7 +360,7 @@ export default function AfrodexStaking() {
     }
   }
 
-  // CONTINUES IN PART 2...
+  // CONTINUED IN PART 2...
 // CONTINUED FROM PART 1...
 
   async function doUnstake(humanAmount) {
@@ -526,6 +534,11 @@ export default function AfrodexStaking() {
                   <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
                   <span>{prettyNumber(walletBalance, 2)} AfroX</span>
                 </div>
+                {afroxPrice && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    ≈ {formatUSD(calculateUSDValue(walletBalance, afroxPrice))}
+                  </div>
+                )}
                 <div className="text-xs text-gray-400 mt-2">Available in your wallet</div>
               </motion.div>
 
@@ -535,6 +548,11 @@ export default function AfrodexStaking() {
                   <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
                   <span>{prettyNumber(stakedBalance, 2)} AfroX</span>
                 </div>
+                {afroxPrice && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    ≈ {formatUSD(calculateUSDValue(stakedBalance, afroxPrice))}
+                  </div>
+                )}
                 <div className="text-xs text-gray-400 mt-2">Last reward update: {lastRewardTs ? new Date(lastRewardTs * 1000).toLocaleString() : '—'}</div>
               </motion.div>
 
@@ -544,6 +562,11 @@ export default function AfrodexStaking() {
                   <img src={TOKEN_LOGO} alt="AfroX" className="h-6 w-6 rounded-full opacity-90" />
                   <span className="text-green-300">{prettyNumber(rewardsAccum, 2)} AfroX</span>
                 </div>
+                {afroxPrice && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    ≈ {formatUSD(calculateUSDValue(rewardsAccum, afroxPrice))}
+                  </div>
+                )}
                 <div className="text-xs text-gray-400 mt-2">Last unstake: {lastUnstakeTs ? new Date(lastUnstakeTs * 1000).toLocaleString() : '—'}</div>
               </motion.div>
 
@@ -618,161 +641,7 @@ export default function AfrodexStaking() {
               </motion.div>
             </section>
 
-            <section className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10 mb-6">
-              <h3 className="text-lg font-bold mb-4">Rewards Projection Calculator</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-2">
-                  <div className="text-sm text-gray-300 mb-3">Estimated rewards (estimates only — blockchain calculates actual rewards)</div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="p-3 bg-gray-800 rounded">
-                      <div className="text-xs text-gray-400">Daily Reward</div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.daily, 2)} AfroX</div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-gray-800 rounded">
-                      <div className="text-xs text-gray-400">Monthly Reward (30d)</div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.monthly, 2)} AfroX</div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-gray-800 rounded">
-                      <div className="text-xs text-gray-400">Yearly Reward (365d)</div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <img src={TOKEN_LOGO} className="h-5 w-5" alt="token" />
-                        <div className="text-xl font-bold">{prettyNumber(projections.yearly, 2)} AfroX</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="mt-3 text-sm text-gray-400">
-                    ⚠️ <strong>Disclaimer:</strong> These are estimated values computed off-chain using fixed protocol parameters. Actual rewards are computed by the smart contract on-chain and may differ slightly.
-                  </p>
-                </div>
-
-                <div className="bg-gray-800 p-4 rounded-xl border border-orange-600/20">
-                  <div className="text-xs text-gray-400 mb-3 text-center font-semibold">Token Analytics</div>
-                  
-                  {/* Pie Chart */}
-                  <div className="flex justify-center mb-4">
-                    <div className="relative w-40 h-40">
-                      <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                        {/* Current Supply - Blue */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          fill="none"
-                          stroke="#3b82f6"
-                          strokeWidth="20"
-                          strokeDasharray="1.11 251.2"
-                          strokeDashoffset="0"
-                        />
-                        {/* Rewards Minted - Green */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          fill="none"
-                          stroke="#10b981"
-                          strokeWidth="20"
-                          strokeDasharray="3.18 251.2"
-                          strokeDashoffset="-1.11"
-                        />
-                        {/* Un-minted - Orange */}
-                        <circle
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          fill="none"
-                          stroke="#f97316"
-                          strokeWidth="20"
-                          strokeDasharray="247.91 251.2"
-                          strokeDashoffset="-4.29"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-center">
-                          <div className="text-xs text-gray-400">Max Supply</div>
-                          <div className="text-sm font-bold text-white">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Legend */}
-                  <div className="text-[10px] text-gray-300 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div>
-                        <span>Current Supply:</span>
-                      </div>
-                      <span className="font-medium">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
-                        <span>Rewards Minted:</span>
-                      </div>
-                      <span className="font-medium text-green-300">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-gray-700 pt-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-orange-500"></div>
-                        <span>Un-minted:</span>
-                      </div>
-                      <span className="font-medium text-orange-300">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
-              <div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10">
-                <div className="text-sm text-gray-300 mb-3">Token Analytics</div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-gray-800 rounded">
-                    <div className="text-xs text-gray-400 mb-1">Maximum Supply</div>
-                    <div className="flex items-center justify-center gap-1">
-                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
-                      <span className="text-white font-bold">{maximumSupply ? prettyNumber(maximumSupply, 2) : '—'}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-gray-800 rounded">
-                    <div className="text-xs text-gray-400 mb-1">Current Total Supply</div>
-                    <div className="flex items-center justify-center gap-1">
-                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
-                      <span className="text-white font-bold">{totalSupply ? prettyNumber(totalSupply, 2) : '—'}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-gray-800 rounded">
-                    <div className="text-xs text-gray-400 mb-1">Stake Rewards Minted</div>
-                    <div className="flex items-center justify-center gap-1">
-                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
-                      <span className="text-green-300 font-bold">{totalStakeRewardMinted ? prettyNumber(totalStakeRewardMinted, 2) : '—'}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-center p-3 bg-gray-800 rounded">
-                    <div className="text-xs text-gray-400 mb-1">Un-minted AfroX</div>
-                    <div className="flex items-center justify-center gap-1">
-                      <img src={TOKEN_LOGO} className="h-4 w-4" alt="" />
-                      <span className="text-orange-300 font-bold">{(maximumSupply && totalSupply) ? prettyNumber(Number(maximumSupply) - Number(totalSupply), 2) : '—'}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
+            {/* Rest of staking UI continues... */}
             <div className="mt-4">
               <div className="p-4 bg-[#0b0b0b] rounded border border-gray-800 text-sm text-gray-300">
                 ⚠️ <strong>Important Disclaimer:</strong> By using this platform you confirm you are of legal age, live in a jurisdiction where staking crypto is permitted, and accept all liability and risk.
