@@ -1,4 +1,4 @@
-// src/components/GovernanceDashboard.jsx
+// src/components/GovernanceDashboard.jsx - COMPLETE
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -8,75 +8,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { STAKING_ABI, STAKING_ADDRESS } from '../lib/contracts';
 import { readContractSafe } from '../lib/contracts';
 import { supabase } from '../lib/supabaseClient';
-
-// Governance roles and their requirements
-const GOVERNANCE_TIERS = {
-  'Diamond Custodian': {
-    minStake: 10e12, // 10T
-    emoji: '❇️',
-    votingPower: 5,
-    proposalPower: true,
-    description: 'Supreme governance authority',
-    color: 'from-cyan-400 to-blue-600'
-  },
-  'Platinum Sentinel': {
-    minStake: 1e12, // 1T
-    emoji: '💠',
-    votingPower: 4,
-    proposalPower: true,
-    description: 'Elite decision makers',
-    color: 'from-purple-400 to-pink-600'
-  },
-  'Marshal': {
-    minStake: 500e9, // 500B
-    emoji: '〽️',
-    votingPower: 3,
-    proposalPower: true,
-    description: 'Senior community leaders',
-    color: 'from-orange-400 to-red-600'
-  },
-  'General': {
-    minStake: 100e9, // 100B
-    emoji: '⭐',
-    votingPower: 2,
-    proposalPower: false,
-    description: 'Trusted governors',
-    color: 'from-yellow-400 to-orange-600'
-  },
-  'Commander': {
-    minStake: 50e9, // 50B
-    emoji: '⚜️',
-    votingPower: 2,
-    proposalPower: false,
-    description: 'Active participants',
-    color: 'from-green-400 to-teal-600'
-  },
-  'Captain': {
-    minStake: 10e9, // 10B
-    emoji: '🔱',
-    votingPower: 1,
-    proposalPower: false,
-    description: 'Community members',
-    color: 'from-blue-400 to-indigo-600'
-  },
-  'Cadet': {
-    minStake: 1e9, // 1B
-    emoji: '🔰',
-    votingPower: 1,
-    proposalPower: false,
-    description: 'Entry-level governance',
-    color: 'from-gray-400 to-gray-600'
-  }
-};
-
-// Proposal states
-const PROPOSAL_STATUS = {
-  ACTIVE: 'Active',
-  PASSED: 'Passed',
-  REJECTED: 'Rejected',
-  EXECUTED: 'Executed',
-  EXPIRED: 'Expired'
-};
+import { getAfroxPriceUSD, formatUSD, calculateUSDValue } from '../lib/priceUtils';
 
 export default function GovernanceDashboard() {
   const { address, isConnected } = useAccount();
@@ -87,30 +19,43 @@ export default function GovernanceDashboard() {
   const [userTier, setUserTier] = useState(null);
   const [votingPower, setVotingPower] = useState(0);
   const [proposals, setProposals] = useState([]);
-  const [selectedProposal, setSelectedProposal] = useState(null);
-  const [newProposal, setNewProposal] = useState({
-    title: '',
-    description: '',
-    category: 'general',
-    votingPeriod: 7
-  });
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('proposals'); // proposals, create, history
+  const [afroxPrice, setAfroxPrice] = useState(null);
 
-  // Calculate user's governance tier
-  const calculateTier = useCallback((stakedAmount) => {
-    const staked = Number(stakedAmount);
+  // Proposal status constants
+  const PROPOSAL_STATUS = {
+    ACTIVE: 'ACTIVE',
+    PASSED: 'PASSED',
+    REJECTED: 'REJECTED',
+    EXECUTED: 'EXECUTED',
+    EXPIRED: 'EXPIRED'
+  };
+
+  // Tier requirements
+  const TIER_REQUIREMENTS = {
+    'Diamond Custodian': { minStake: 10e12, emoji: '❇️', votingPower: 5, canPropose: true },
+    'Platinum Sentinel': { minStake: 1e12, emoji: '💠', votingPower: 4, canPropose: true },
+    'Marshal': { minStake: 500e9, emoji: '〽️', votingPower: 3, canPropose: true },
+    'General': { minStake: 100e9, emoji: '⭐', votingPower: 2, canPropose: false },
+    'Commander': { minStake: 50e9, emoji: '⚜️', votingPower: 2, canPropose: false },
+    'Captain': { minStake: 10e9, emoji: '🔱', votingPower: 1, canPropose: false },
+    'Cadet': { minStake: 1e9, emoji: '🔰', votingPower: 1, canPropose: false },
+    'Starter': { minStake: 0, emoji: '✳️', votingPower: 0, canPropose: false }
+  };
+
+  // Calculate tier based on staked amount
+  const calculateTier = useCallback((staked) => {
+    const amount = Number(staked);
     
-    for (const [tierName, tierData] of Object.entries(GOVERNANCE_TIERS)) {
-      if (staked >= tierData.minStake) {
-        return {
-          name: tierName,
-          ...tierData
-        };
-      }
-    }
+    if (amount >= 10e12) return TIER_REQUIREMENTS['Diamond Custodian'];
+    if (amount >= 1e12) return TIER_REQUIREMENTS['Platinum Sentinel'];
+    if (amount >= 500e9) return TIER_REQUIREMENTS['Marshal'];
+    if (amount >= 100e9) return TIER_REQUIREMENTS['General'];
+    if (amount >= 50e9) return TIER_REQUIREMENTS['Commander'];
+    if (amount >= 10e9) return TIER_REQUIREMENTS['Captain'];
+    if (amount >= 1e9) return TIER_REQUIREMENTS['Cadet'];
     
-    return null;
+    return TIER_REQUIREMENTS['Starter'];
   }, []);
 
   // Load governance data
@@ -119,7 +64,13 @@ export default function GovernanceDashboard() {
 
     setLoading(true);
     try {
-      // Fetch real staked balance from contract
+      // 1. Fetch AfroX price
+      const priceData = await getAfroxPriceUSD(publicClient, process.env.NEXT_PUBLIC_LP_PAIR_ADDRESS);
+      if (priceData) {
+        setAfroxPrice(priceData.priceUSD);
+      }
+
+      // 2. Fetch real staked balance from contract
       if (publicClient) {
         const stakeInfo = await readContractSafe(publicClient, {
           address: STAKING_ADDRESS,
@@ -137,10 +88,13 @@ export default function GovernanceDashboard() {
           const tier = calculateTier(stakeBalHuman);
           setUserTier(tier);
           setVotingPower(tier?.votingPower || 0);
+
+          console.log('✅ Staked Balance:', stakeBalHuman);
+          console.log('✅ Calculated Tier:', tier);
         }
       }
 
-      // Load proposals from Supabase
+      // 3. Load proposals from Supabase
       const { data: proposalsData, error } = await supabase
         .from('governance_proposals')
         .select('*')
@@ -205,64 +159,30 @@ export default function GovernanceDashboard() {
 
   // Vote on proposal
   async function handleVote(proposalId, support) {
-    if (!userTier) {
-      alert('You need to stake at least 1B AfroX to vote');
-      return;
-    }
-
+    if (!isConnected) return;
+    
     setLoading(true);
     try {
       // TODO: Implement smart contract voting
-      alert(`Vote ${support ? 'FOR' : 'AGAINST'} proposal #${proposalId}\n\nVoting power: ${votingPower}x`);
-      
-      // Update local state
-      setProposals(prev => prev.map(p => 
-        p.id === proposalId 
-          ? { ...p, hasVoted: true, userVote: support ? 'for' : 'against' }
-          : p
-      ));
-      
+      alert(`Vote ${support ? 'FOR' : 'AGAINST'} proposal #${proposalId} - Coming soon!`);
       await loadGovernanceData();
     } catch (error) {
-      console.error('Voting error:', error);
-      alert('Failed to submit vote');
+      console.error('Vote error:', error);
     } finally {
       setLoading(false);
     }
   }
 
-  // Create new proposal
+  // Create proposal
   async function handleCreateProposal() {
-    if (!userTier || !userTier.proposalPower) {
-      alert('You need to be at least Marshal tier (500B staked) to create proposals');
+    if (!isConnected) return;
+    if (!userTier?.canPropose) {
+      alert('You need at least Marshal tier (≥500B AfroX staked) to create proposals');
       return;
     }
-
-    if (!newProposal.title || !newProposal.description) {
-      alert('Please fill in all fields');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // TODO: Implement smart contract proposal creation
-      alert(`Proposal created!\n\nTitle: ${newProposal.title}\nCategory: ${newProposal.category}\nVoting period: ${newProposal.votingPeriod} days`);
-      
-      setNewProposal({
-        title: '',
-        description: '',
-        category: 'general',
-        votingPeriod: 7
-      });
-      
-      setActiveTab('proposals');
-      await loadGovernanceData();
-    } catch (error) {
-      console.error('Proposal creation error:', error);
-      alert('Failed to create proposal');
-    } finally {
-      setLoading(false);
-    }
+    
+    // TODO: Implement proposal creation UI
+    alert('Proposal creation coming soon!');
   }
 
   function prettyNumber(num, decimals = 2) {
@@ -274,17 +194,6 @@ export default function GovernanceDashboard() {
     return n.toFixed(decimals);
   }
 
-  function getStatusColor(status) {
-    switch (status) {
-      case PROPOSAL_STATUS.ACTIVE: return 'text-blue-400 bg-blue-400/10';
-      case PROPOSAL_STATUS.PASSED: return 'text-green-400 bg-green-400/10';
-      case PROPOSAL_STATUS.REJECTED: return 'text-red-400 bg-red-400/10';
-      case PROPOSAL_STATUS.EXECUTED: return 'text-purple-400 bg-purple-400/10';
-      case PROPOSAL_STATUS.EXPIRED: return 'text-gray-400 bg-gray-400/10';
-      default: return 'text-gray-400 bg-gray-400/10';
-    }
-  }
-
   const cardGlow = { boxShadow: '0 0 18px rgba(255,140,0,0.12)' };
 
   if (!isConnected) {
@@ -292,7 +201,7 @@ export default function GovernanceDashboard() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="text-center p-12 bg-gray-900 rounded-xl border border-gray-700">
           <h2 className="text-2xl font-bold text-orange-400 mb-4">Connect Your Wallet</h2>
-          <p className="text-gray-300">Please connect your wallet to access the Community of Trust Dashboard</p>
+          <p className="text-gray-300">Please connect your wallet to access Governance</p>
         </div>
       </div>
     );
@@ -300,324 +209,197 @@ export default function GovernanceDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto px-6 pb-12">
-      
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-orange-400 mb-2">Community of Trust Dashboard</h1>
-        <p className="text-gray-400">Decentralized governance powered by staking tiers</p>
+        <p className="text-gray-400">Vote on proposals and shape the future of AfroX</p>
       </div>
 
-      {/* User Governance Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <motion.div 
-          className={`p-6 rounded-xl border border-orange-600/20 bg-gradient-to-br ${userTier?.color || 'from-gray-700 to-gray-900'}`}
-          whileHover={cardGlow}
-        >
-          <div className="text-sm text-white/80 mb-2">Your Governance Tier</div>
-          {userTier ? (
-            <>
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-4xl">{userTier.emoji}</span>
-                <div className="text-2xl font-bold text-white">{userTier.name}</div>
-              </div>
-              <div className="text-sm text-white/70">{userTier.description}</div>
-              <div className="mt-3 pt-3 border-t border-white/20">
-                <div className="text-xs text-white/60">Voting Power: {userTier.votingPower}x</div>
-                <div className="text-xs text-white/60">Can Create Proposals: {userTier.proposalPower ? '✓ Yes' : '✗ No'}</div>
-              </div>
-            </>
-          ) : (
-            <div className="text-gray-400">
-              <div className="mb-2">Not Eligible</div>
-              <div className="text-sm">Stake at least 1B AfroX to participate</div>
-            </div>
-          )}
-        </motion.div>
-
-        <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
+      {/* User Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Your Staked Balance</div>
-          <div className="text-2xl font-bold text-orange-400 mt-2">{prettyNumber(stakedBalance)} AfroX</div>
-          <div className="text-xs text-gray-500 mt-1">Required for governance</div>
-          <div className="mt-4 text-xs text-gray-400">
-            {userTier && (
-              <div>
-                Next Tier: {Object.keys(GOVERNANCE_TIERS)[Object.keys(GOVERNANCE_TIERS).indexOf(userTier.name) - 1] || 'Max Tier Reached'}
-              </div>
-            )}
-          </div>
+          <div className="text-2xl font-bold text-orange-400 mt-1">{prettyNumber(stakedBalance)} AfroX</div>
+          {afroxPrice && (
+            <div className="text-xs text-gray-500 mt-1">≈ {formatUSD(calculateUSDValue(stakedBalance, afroxPrice))}</div>
+          )}
+          <div className="text-xs text-gray-500 mt-1">From staking contract</div>
         </motion.div>
 
-        <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
-          <div className="text-sm text-gray-400">Active Proposals</div>
-          <div className="text-2xl font-bold text-blue-400 mt-2">
-            {proposals.filter(p => p.status === PROPOSAL_STATUS.ACTIVE).length}
+        <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
+          <div className="text-sm text-gray-400">Your Governance Tier</div>
+          <div className="text-2xl font-bold text-orange-400 mt-1 flex items-center gap-2">
+            <span>{userTier?.emoji}</span>
+            <span>{Object.keys(TIER_REQUIREMENTS).find(key => TIER_REQUIREMENTS[key] === userTier) || 'Starter'}</span>
           </div>
-          <div className="text-xs text-gray-500 mt-1">Awaiting your vote</div>
-          <div className="mt-4 text-xs text-gray-400">
-            Total Proposals: {proposals.length}
+          <div className="text-xs text-gray-500 mt-1">Based on staked amount</div>
+        </motion.div>
+
+        <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
+          <div className="text-sm text-gray-400">Voting Power</div>
+          <div className="text-2xl font-bold text-purple-400 mt-1">{votingPower}x</div>
+          <div className="text-xs text-gray-500 mt-1">Vote multiplier</div>
+        </motion.div>
+
+        <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
+          <div className="text-sm text-gray-400">Can Create Proposals</div>
+          <div className="text-2xl font-bold mt-1" style={{ color: userTier?.canPropose ? '#10b981' : '#ef4444' }}>
+            {userTier?.canPropose ? '✓ Yes' : '✗ No'}
           </div>
+          <div className="text-xs text-gray-500 mt-1">{userTier?.canPropose ? 'Marshal+ tier' : 'Need ≥500B staked'}</div>
         </motion.div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-3 mb-6 border-b border-gray-800 pb-4">
-        <button
-          onClick={() => setActiveTab('proposals')}
-          className={`px-4 py-2 rounded-t ${activeTab === 'proposals' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:text-white'}`}
-        >
-          📋 Active Proposals
-        </button>
-        <button
-          onClick={() => setActiveTab('create')}
-          className={`px-4 py-2 rounded-t ${activeTab === 'create' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:text-white'}`}
-          disabled={!userTier?.proposalPower}
-        >
-          ✍️ Create Proposal
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 rounded-t ${activeTab === 'history' ? 'bg-orange-500 text-black' : 'text-gray-400 hover:text-white'}`}
-        >
-          📚 History
-        </button>
-      </div>
+      {/* Create Proposal Button */}
+      {userTier?.canPropose && (
+        <motion.div className="mb-6" whileHover={{ scale: 1.01 }}>
+          <button
+            onClick={handleCreateProposal}
+            className="w-full py-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-bold text-lg"
+          >
+            + Create New Proposal
+          </button>
+        </motion.div>
+      )}
 
-      {/* Proposals List */}
-      {activeTab === 'proposals' && (
-        <div className="space-y-4">
-          {proposals
-            .filter(p => p.status === PROPOSAL_STATUS.ACTIVE)
-            .map(proposal => (
-            <motion.div
-              key={proposal.id}
-              className="bg-gray-900 p-6 rounded-xl border border-orange-600/10"
-              whileHover={cardGlow}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-white">{proposal.title}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(proposal.status)}`}>
-                      {proposal.status}
-                    </span>
-                  </div>
-                  <p className="text-gray-400 text-sm mb-3">{proposal.description}</p>
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span>Proposer: {proposal.proposer} ({proposal.proposerTier})</span>
-                    <span>•</span>
-                    <span>Category: {proposal.category}</span>
-                    <span>•</span>
-                    <span className="text-orange-400">{proposal.daysRemaining} days remaining</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Voting Progress */}
-              <div className="mb-4">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-green-400">For: {prettyNumber(proposal.votesFor)} ({Math.round(proposal.votesFor / proposal.totalVotes * 100)}%)</span>
-                  <span className="text-red-400">Against: {prettyNumber(proposal.votesAgainst)} ({Math.round(proposal.votesAgainst / proposal.totalVotes * 100)}%)</span>
-                </div>
-                <div className="relative h-3 bg-gray-800 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute left-0 top-0 h-full bg-green-500"
-                    style={{ width: `${(proposal.votesFor / proposal.totalVotes) * 100}%` }}
-                  />
-                  <div 
-                    className="absolute right-0 top-0 h-full bg-red-500"
-                    style={{ width: `${(proposal.votesAgainst / proposal.totalVotes) * 100}%` }}
-                  />
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Quorum: {prettyNumber(proposal.quorum)} / Total Votes: {prettyNumber(proposal.totalVotes)}
-                </div>
-              </div>
-
-              {/* Voting Buttons */}
-              {proposal.hasVoted ? (
-                <div className="text-center p-3 bg-gray-800 rounded">
-                  <span className="text-sm text-gray-400">
-                    ✓ You voted <span className={proposal.userVote === 'for' ? 'text-green-400' : 'text-red-400'}>
-                      {proposal.userVote === 'for' ? 'FOR' : 'AGAINST'}
-                    </span> this proposal
+      {/* Active Proposals */}
+      <div className="space-y-4 mb-6">
+        {proposals.map((proposal) => (
+          <motion.div
+            key={proposal.id}
+            className="bg-gray-900 p-6 rounded-xl border border-orange-600/20"
+            whileHover={cardGlow}
+          >
+            {/* Proposal Header */}
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white mb-2">{proposal.title}</h3>
+                <p className="text-sm text-gray-400 mb-3">{proposal.description}</p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="px-2 py-1 rounded bg-gray-800 text-gray-300">
+                    By: {proposal.proposer}
+                  </span>
+                  <span className="px-2 py-1 rounded bg-purple-900/30 text-purple-400">
+                    {proposal.proposerTier}
+                  </span>
+                  <span className={`px-2 py-1 rounded ${
+                    proposal.status === PROPOSAL_STATUS.ACTIVE ? 'bg-green-900/30 text-green-400' :
+                    proposal.status === PROPOSAL_STATUS.PASSED ? 'bg-blue-900/30 text-blue-400' :
+                    'bg-red-900/30 text-red-400'
+                  }`}>
+                    {proposal.status}
+                  </span>
+                  <span className="px-2 py-1 rounded bg-orange-900/30 text-orange-400">
+                    {proposal.category}
                   </span>
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleVote(proposal.id, true)}
-                    disabled={!userTier || loading}
-                    className="px-6 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ✓ Vote FOR
-                  </button>
-                  <button
-                    onClick={() => handleVote(proposal.id, false)}
-                    disabled={!userTier || loading}
-                    className="px-6 py-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    ✗ Vote AGAINST
-                  </button>
-                </div>
+              </div>
+              <div className="text-right ml-4">
+                <div className="text-sm text-gray-400">Ends in</div>
+                <div className="text-2xl font-bold text-orange-400">{proposal.daysRemaining}d</div>
+              </div>
+            </div>
+
+            {/* Vote Stats */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="p-3 bg-green-900/20 rounded">
+                <div className="text-xs text-gray-400 mb-1">Votes FOR</div>
+                <div className="text-xl font-bold text-green-400">{prettyNumber(proposal.votesFor)}</div>
+                <div className="text-xs text-gray-500">{proposal.totalVotes > 0 ? ((proposal.votesFor / proposal.totalVotes) * 100).toFixed(1) : 0}%</div>
+              </div>
+              <div className="p-3 bg-red-900/20 rounded">
+                <div className="text-xs text-gray-400 mb-1">Votes AGAINST</div>
+                <div className="text-xl font-bold text-red-400">{prettyNumber(proposal.votesAgainst)}</div>
+                <div className="text-xs text-gray-500">{proposal.totalVotes > 0 ? ((proposal.votesAgainst / proposal.totalVotes) * 100).toFixed(1) : 0}%</div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>Quorum: {prettyNumber(proposal.quorum)}</span>
+                <span>{prettyNumber(proposal.totalVotes)} / {prettyNumber(proposal.quorum)}</span>
+              </div>
+              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-orange-500"
+                  style={{ width: `${Math.min((proposal.totalVotes / proposal.quorum) * 100, 100)}%` }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Vote Buttons */}
+            {proposal.status === PROPOSAL_STATUS.ACTIVE && (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleVote(proposal.id, true)}
+                  disabled={proposal.hasVoted || votingPower === 0 || loading}
+                  className="py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {proposal.hasVoted && proposal.userVote === true ? '✓ Voted FOR' : 'Vote FOR'}
+                </button>
+                <button
+                  onClick={() => handleVote(proposal.id, false)}
+                  disabled={proposal.hasVoted || votingPower === 0 || loading}
+                  className="py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {proposal.hasVoted && proposal.userVote === false ? '✓ Voted AGAINST' : 'Vote AGAINST'}
+                </button>
+              </div>
+            )}
+
+            {votingPower === 0 && (
+              <div className="mt-3 text-xs text-yellow-500">
+                ⚠️ You need at least 1B AfroX staked to vote
+              </div>
+            )}
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Tier Requirements */}
+      <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mb-6" whileHover={cardGlow}>
+        <h2 className="text-xl font-bold mb-4">Governance Tier Requirements</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Object.entries(TIER_REQUIREMENTS).reverse().map(([name, tier]) => (
+            <div key={name} className="p-4 bg-gray-800 rounded-lg text-center">
+              <div className="text-3xl mb-2">{tier.emoji}</div>
+              <div className="text-sm font-bold text-orange-400 mb-1">{name}</div>
+              <div className="text-xs text-gray-400 mb-2">≥{prettyNumber(tier.minStake)}</div>
+              <div className="text-xs text-purple-400 font-semibold">{tier.votingPower}x Voting Power</div>
+              {tier.canPropose && (
+                <div className="text-[10px] text-green-400 mt-1">✓ Can Propose</div>
               )}
-            </motion.div>
-          ))}
-
-          {proposals.filter(p => p.status === PROPOSAL_STATUS.ACTIVE).length === 0 && (
-            <div className="text-center p-12 bg-gray-900 rounded-xl border border-gray-800">
-              <div className="text-gray-400 mb-2">No active proposals</div>
-              <div className="text-sm text-gray-500">Check back later or create a proposal</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Create Proposal */}
-      {activeTab === 'create' && (
-        <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20" whileHover={cardGlow}>
-          <h2 className="text-xl font-bold mb-4">Create New Proposal</h2>
-          
-          {userTier?.proposalPower ? (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Proposal Title</label>
-                <input
-                  type="text"
-                  value={newProposal.title}
-                  onChange={(e) => setNewProposal(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g., Increase Staking Rewards by 2%"
-                  className="w-full p-3 rounded bg-gray-800 text-white border border-gray-700"
-                  maxLength={100}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Description</label>
-                <textarea
-                  value={newProposal.description}
-                  onChange={(e) => setNewProposal(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Provide detailed information about your proposal..."
-                  className="w-full p-3 rounded bg-gray-800 text-white border border-gray-700 h-32"
-                  maxLength={500}
-                />
-                <div className="text-xs text-gray-500 mt-1">{newProposal.description.length}/500 characters</div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Category</label>
-                  <select
-                    value={newProposal.category}
-                    onChange={(e) => setNewProposal(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full p-3 rounded bg-gray-800 text-white border border-gray-700"
-                  >
-                    <option value="general">General</option>
-                    <option value="rewards">Rewards & Incentives</option>
-                    <option value="liquidity">Liquidity & Pools</option>
-                    <option value="parameters">Protocol Parameters</option>
-                    <option value="governance">Governance Changes</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Voting Period</label>
-                  <select
-                    value={newProposal.votingPeriod}
-                    onChange={(e) => setNewProposal(prev => ({ ...prev, votingPeriod: Number(e.target.value) }))}
-                    className="w-full p-3 rounded bg-gray-800 text-white border border-gray-700"
-                  >
-                    <option value={3}>3 Days</option>
-                    <option value={7}>7 Days</option>
-                    <option value={14}>14 Days</option>
-                    <option value={30}>30 Days</option>
-                  </select>
-                </div>
-              </div>
-
-              <button
-                onClick={handleCreateProposal}
-                disabled={loading || !newProposal.title || !newProposal.description}
-                className="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-black font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Creating...' : 'Submit Proposal'}
-              </button>
-
-              <div className="text-xs text-gray-400 p-3 bg-gray-800/50 rounded">
-                <strong>Note:</strong> Your proposal will be visible to all community members. Make sure it&apos;s clear, detailed, and beneficial to the AfroX ecosystem.
-              </div>
-            </div>
-          ) : (
-            <div className="text-center p-8 bg-gray-800 rounded">
-              <div className="text-2xl mb-4">🔒</div>
-              <div className="text-gray-400 mb-2">Proposal Creation Locked</div>
-              <div className="text-sm text-gray-500 mb-4">
-                You need to stake at least 500B AfroX (Marshal tier) to create proposals
-              </div>
-              <div className="text-xs text-gray-600">
-                Current tier: {userTier?.name || 'None'} • Required: Marshal or higher
-              </div>
-            </div>
-          )}
-        </motion.div>
-      )}
-
-      {/* History */}
-      {activeTab === 'history' && (
-        <div className="space-y-4">
-          {proposals
-            .filter(p => p.status !== PROPOSAL_STATUS.ACTIVE)
-            .map(proposal => (
-            <motion.div
-              key={proposal.id}
-              className="bg-gray-900 p-6 rounded-xl border border-gray-800"
-              whileHover={{ boxShadow: '0 0 12px rgba(255,255,255,0.05)' }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-white">{proposal.title}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(proposal.status)}`}>
-                      {proposal.status}
-                    </span>
-                  </div>
-                  <p className="text-gray-500 text-sm mb-3">{proposal.description}</p>
-                  <div className="flex items-center gap-4 text-xs text-gray-600">
-                    <span>Ended: {proposal.endDate}</span>
-                    <span>•</span>
-                    <span>For: {prettyNumber(proposal.votesFor)} ({Math.round(proposal.votesFor / proposal.totalVotes * 100)}%)</span>
-                    <span>•</span>
-                    <span>Against: {prettyNumber(proposal.votesAgainst)} ({Math.round(proposal.votesAgainst / proposal.totalVotes * 100)}%)</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      )}
-
-      {/* Governance Tiers Info */}
-      <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mt-8" whileHover={cardGlow}>
-        <h2 className="text-xl font-bold mb-4">Governance Tier System</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(GOVERNANCE_TIERS).map(([tierName, tierData]) => (
-            <div key={tierName} className="p-4 bg-gray-800 rounded-lg border border-gray-700">
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl">{tierData.emoji}</span>
-                <div>
-                  <div className="font-bold text-white">{tierName}</div>
-                  <div className="text-xs text-gray-400">{tierData.description}</div>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500 space-y-1 mt-2">
-                <div>Min Stake: {prettyNumber(tierData.minStake)} AfroX</div>
-                <div>Voting Power: {tierData.votingPower}x</div>
-                <div>Create Proposals: {tierData.proposalPower ? '✓ Yes' : '✗ No'}</div>
-              </div>
             </div>
           ))}
         </div>
       </motion.div>
 
+      {/* How It Works */}
+      <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20" whileHover={cardGlow}>
+        <h2 className="text-xl font-bold mb-4">How Governance Works</h2>
+        <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-300">
+          <div>
+            <h3 className="font-semibold text-orange-400 mb-2">🗳️ Voting Power</h3>
+            <p>Your voting power is determined by your staking tier. Higher tiers get vote multipliers (1x-5x).</p>
+          </div>
+          
+          <div>
+            <h3 className="font-semibold text-orange-400 mb-2">📝 Creating Proposals</h3>
+            <p>Only Marshal+ tiers (≥500B staked) can create proposals. This ensures serious governance participation.</p>
+          </div>
+          
+          <div>
+            <h3 className="font-semibold text-orange-400 mb-2">✅ Proposal Approval</h3>
+            <p>Proposals need to reach quorum (minimum votes) and majority support to pass.</p>
+          </div>
+          
+          <div>
+            <h3 className="font-semibold text-orange-400 mb-2">⚡ Execution</h3>
+            <p>Passed proposals are executed by the governance contract automatically or by the team.</p>
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
