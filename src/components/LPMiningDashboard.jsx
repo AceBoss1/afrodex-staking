@@ -1,7 +1,7 @@
 // src/components/LPMiningDashboard.jsx - COMPLETE FIXED VERSION
-// FIXED: Better LP token detection with multiple methods
+// FIXED: Rewards calculated from AfroX VALUE in LP position, not LP token count
+// FIXED: Instant bonus shows billions of AfroX, not tiny decimals
 // FIXED: USD values showing everywhere
-// FIXED: Instant Bonus explanation
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -39,12 +39,16 @@ export default function LPMiningDashboard({ afroxPrice }) {
   const AFROX_WETH_PAIR = process.env.NEXT_PUBLIC_LP_PAIR_ADDRESS;
   const AFROX_TOKEN = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS;
 
+  // Lock options with rewards based on AfroX VALUE in LP
+  // Instant Bonus: 5% of AfroX value (claimable after 7 days)
+  // Mining Bonus: Additional % based on lock duration
+  // Total APY = Instant + Mining
   const lockOptions = useMemo(() => [
-    { days: 30, label: '30 Days', apy: 10, instantBonus: 5, miningBonus: 5 },
-    { days: 60, label: '60 Days', apy: 17, instantBonus: 5, miningBonus: 12 },
-    { days: 90, label: '90 Days', apy: 25, instantBonus: 5, miningBonus: 20 },
-    { days: 180, label: '180 Days', apy: 72, instantBonus: 5, miningBonus: 67 },
-    { days: 365, label: '365 Days', apy: 155, instantBonus: 5, miningBonus: 150 }
+    { days: 30, label: '30 Days', instantBonusPct: 5, miningBonusPct: 5, totalApy: 10 },
+    { days: 60, label: '60 Days', instantBonusPct: 5, miningBonusPct: 12, totalApy: 17 },
+    { days: 90, label: '90 Days', instantBonusPct: 5, miningBonusPct: 20, totalApy: 25 },
+    { days: 180, label: '180 Days', instantBonusPct: 5, miningBonusPct: 67, totalApy: 72 },
+    { days: 365, label: '365 Days', instantBonusPct: 5, miningBonusPct: 150, totalApy: 155 }
   ], []);
 
   // Load LP data with multiple fallback methods
@@ -110,8 +114,13 @@ export default function LPMiningDashboard({ afroxPrice }) {
           const afroxReserve = Number(isAfroXToken0 ? reserves[0] : reserves[1]) / 1e4;
           const wethReserve = Number(isAfroXToken0 ? reserves[1] : reserves[0]) / 1e18;
 
+          // USER'S AfroX in the LP position - THIS IS WHAT REWARDS ARE BASED ON
           const userAfroX = afroxReserve * userShare;
           const userWETH = wethReserve * userShare;
+
+          console.log('✅ User Share:', (userShare * 100).toFixed(6) + '%');
+          console.log('✅ User AfroX in LP:', userAfroX);
+          console.log('✅ User WETH in LP:', userWETH);
 
           // Calculate USD values
           const ethPrice = 3000; // Approximate
@@ -119,24 +128,27 @@ export default function LPMiningDashboard({ afroxPrice }) {
           const wethValueUSD = userWETH * ethPrice;
           const totalValueUSD = afroxValueUSD + wethValueUSD;
 
-          console.log('✅ User Share:', (userShare * 100).toFixed(4) + '%');
-          console.log('✅ User AfroX:', userAfroX);
-          console.log('✅ User WETH:', userWETH);
           console.log('✅ Total Value USD:', totalValueUSD);
+
+          const lpBalanceHuman = Number(formatUnits(balance, Number(decimals)));
 
           setLpTokens([{
             address: AFROX_WETH_PAIR,
-            balance: formatUnits(balance, Number(decimals)),
+            balance: lpBalanceHuman,
+            balanceFormatted: formatUnits(balance, Number(decimals)),
+            balanceRaw: balance,
             pairName: 'AfroX-WETH',
             symbol: 'UNI-V2',
             decimals: Number(decimals),
             dex: 'Uniswap V2',
-            userAfroX,
+            userAfroX,        // User's AfroX VALUE in the LP - used for reward calculations
             userWETH,
             afroxValueUSD,
             wethValueUSD,
             totalValueUSD,
-            shareOfPool: userShare * 100
+            shareOfPool: userShare * 100,
+            // Store ratio for calculating rewards when user enters amount
+            afroxPerLP: lpBalanceHuman > 0 ? userAfroX / lpBalanceHuman : 0
           }]);
 
         } catch (detailsError) {
@@ -144,14 +156,15 @@ export default function LPMiningDashboard({ afroxPrice }) {
           // Still show basic LP balance even if details fail
           setLpTokens([{
             address: AFROX_WETH_PAIR,
-            balance: formatUnits(balance, 18),
+            balance: Number(formatUnits(balance, 18)),
             pairName: 'AfroX-WETH',
             symbol: 'LP',
             dex: 'Uniswap V2',
             userAfroX: 0,
             userWETH: 0,
             totalValueUSD: 0,
-            shareOfPool: 0
+            shareOfPool: 0,
+            afroxPerLP: 0
           }]);
         }
       } else {
@@ -161,9 +174,9 @@ export default function LPMiningDashboard({ afroxPrice }) {
 
       // Sample leaderboard
       setLeaderboard([
-        { rank: 1, wallet: '0x1234...5678', totalLP: '500000', rewards: '45000' },
-        { rank: 2, wallet: '0x8765...4321', totalLP: '350000', rewards: '28000' },
-        { rank: 3, wallet: '0xabcd...ef01', totalLP: '250000', rewards: '19500' }
+        { rank: 1, wallet: '0x1234...5678', totalLP: '500000', rewards: '45000000000' },
+        { rank: 2, wallet: '0x8765...4321', totalLP: '350000', rewards: '28000000000' },
+        { rank: 3, wallet: '0xabcd...ef01', totalLP: '250000', rewards: '19500000000' }
       ]);
 
     } catch (error) {
@@ -178,19 +191,51 @@ export default function LPMiningDashboard({ afroxPrice }) {
     loadLPData();
   }, [loadLPData]);
 
-  // Calculate rewards
-  const calculateRewards = useCallback((amount, days) => {
+  // Calculate AfroX value from LP amount
+  const getAfroxValueFromLP = useCallback((lpAmount) => {
+    if (!selectedToken || !lpAmount) return 0;
+    const lpAmountNum = Number(lpAmount || 0);
+    const afroxPerLP = selectedToken.afroxPerLP || 0;
+    return lpAmountNum * afroxPerLP;
+  }, [selectedToken]);
+
+  // Calculate rewards based on AfroX VALUE in the LP position
+  const calculateRewards = useCallback((afroxValue, days) => {
     const option = lockOptions.find(opt => opt.days === days);
-    if (!option) return { instant: 0, mining: 0, total: 0 };
-    const amt = Number(amount || 0);
+    if (!option) return { instant: 0, mining: 0, total: 0, referrerBonus: 0 };
+    
+    // Calculate rewards based on AfroX VALUE
+    const instantBonus = afroxValue * (option.instantBonusPct / 100);      // 5% of AfroX value
+    const miningReward = afroxValue * (option.miningBonusPct / 100);       // Variable based on duration
+    const totalReward = afroxValue * (option.totalApy / 100);             // Total APY
+    const referrerBonus = instantBonus / 2;                                // Referrer gets 50% of instant bonus
+    
     return {
-      instant: amt * (option.instantBonus / 100),
-      mining: amt * (option.miningBonus / 100),
-      total: amt * (option.apy / 100)
+      instant: instantBonus,
+      mining: miningReward,
+      total: totalReward,
+      referrerBonus: referrerBonus
     };
   }, [lockOptions]);
 
-  const rewards = calculateRewards(lockAmount, lockDuration);
+  // Current rewards calculation
+  const rewards = useMemo(() => {
+    let afroxValue = 0;
+    
+    if (lockAmount && selectedToken) {
+      // Calculate based on entered LP amount
+      afroxValue = getAfroxValueFromLP(lockAmount);
+    } else if (selectedToken) {
+      // Show rewards for full balance if no amount entered
+      afroxValue = selectedToken.userAfroX || 0;
+    }
+    
+    const rewardCalc = calculateRewards(afroxValue, lockDuration);
+    return {
+      ...rewardCalc,
+      afroxValue
+    };
+  }, [lockAmount, lockDuration, selectedToken, calculateRewards, getAfroxValueFromLP]);
 
   function prettyNumber(num, decimals = 2) {
     const n = Number(num || 0);
@@ -198,10 +243,11 @@ export default function LPMiningDashboard({ afroxPrice }) {
     if (n >= 1e9) return (n / 1e9).toFixed(decimals) + 'B';
     if (n >= 1e6) return (n / 1e6).toFixed(decimals) + 'M';
     if (n >= 1e3) return (n / 1e3).toFixed(decimals) + 'K';
-    return n.toFixed(decimals);
+    return n.toLocaleString(undefined, { maximumFractionDigits: decimals });
   }
 
   const cardGlow = { boxShadow: '0 0 18px rgba(255,140,0,0.12)' };
+  const selectedOption = lockOptions.find(opt => opt.days === lockDuration);
 
   if (!isConnected) {
     return (
@@ -217,7 +263,7 @@ export default function LPMiningDashboard({ afroxPrice }) {
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-orange-400 mb-2">LP Token Lock-Mining Dashboard</h1>
-        <p className="text-gray-400">Lock LP tokens and earn mining rewards + instant bonuses</p>
+        <p className="text-gray-400">Lock LP tokens and earn mining rewards + instant bonuses based on your AfroX value</p>
       </div>
 
       {/* Error Message */}
@@ -232,7 +278,7 @@ export default function LPMiningDashboard({ afroxPrice }) {
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">LP Balance</div>
           <div className="text-2xl font-bold text-orange-400 mt-1">
-            {loading ? 'Loading...' : lpTokens.length > 0 ? `${prettyNumber(lpTokens[0]?.balance || 0, 6)} LP` : '0 LP'}
+            {loading ? 'Loading...' : lpTokens.length > 0 ? `${Number(lpTokens[0]?.balance || 0).toFixed(8)} LP` : '0 LP'}
           </div>
           {lpTokens[0]?.totalValueUSD > 0 && (
             <div className="text-xs text-gray-500 mt-1">≈ {formatUSD(lpTokens[0].totalValueUSD)}</div>
@@ -241,18 +287,18 @@ export default function LPMiningDashboard({ afroxPrice }) {
         </motion.div>
 
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
-          <div className="text-sm text-gray-400">Deposited AfroX</div>
+          <div className="text-sm text-gray-400">Your AfroX in LP</div>
           <div className="text-2xl font-bold text-blue-400 mt-1">
             {lpTokens[0]?.userAfroX ? `${prettyNumber(lpTokens[0].userAfroX)} AfroX` : '0 AfroX'}
           </div>
           {lpTokens[0]?.afroxValueUSD > 0 && afroxPrice && (
             <div className="text-xs text-gray-500 mt-1">≈ {formatUSD(lpTokens[0].afroxValueUSD)}</div>
           )}
-          <div className="text-xs text-gray-500 mt-1">Your AfroX in pool</div>
+          <div className="text-xs text-green-400 mt-1">Rewards based on this</div>
         </motion.div>
 
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
-          <div className="text-sm text-gray-400">Deposited WETH</div>
+          <div className="text-sm text-gray-400">Your WETH in LP</div>
           <div className="text-2xl font-bold text-green-400 mt-1">
             {lpTokens[0]?.userWETH ? `${lpTokens[0].userWETH.toFixed(6)} WETH` : '0 WETH'}
           </div>
@@ -265,7 +311,7 @@ export default function LPMiningDashboard({ afroxPrice }) {
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Share of Pool</div>
           <div className="text-2xl font-bold text-purple-400 mt-1">
-            {lpTokens[0]?.shareOfPool ? `${lpTokens[0].shareOfPool.toFixed(4)}%` : '0%'}
+            {lpTokens[0]?.shareOfPool ? `${lpTokens[0].shareOfPool.toFixed(6)}%` : '0%'}
           </div>
           <div className="text-xs text-gray-500 mt-1">Your pool ownership</div>
         </motion.div>
@@ -298,8 +344,10 @@ export default function LPMiningDashboard({ afroxPrice }) {
                 >
                   <div className="text-center">
                     <div className="text-lg font-bold text-orange-400">{option.label}</div>
-                    <div className="text-sm font-bold text-green-400 mt-2">APY: {option.apy}%</div>
-                    <div className="text-[10px] text-gray-500 mt-1">Instant: {option.instantBonus}% | Mining: {option.miningBonus}%</div>
+                    <div className="text-sm font-bold text-green-400 mt-2">APY: {option.totalApy}%</div>
+                    <div className="text-[10px] text-gray-500 mt-1">
+                      Instant: {option.instantBonusPct}% | Mining: {option.miningBonusPct}%
+                    </div>
                   </div>
                 </div>
               ))}
@@ -322,56 +370,82 @@ export default function LPMiningDashboard({ afroxPrice }) {
                 </option>
                 {lpTokens.map((token) => (
                   <option key={token.address} value={token.address}>
-                    {token.pairName} ({token.dex}) - {prettyNumber(token.balance, 6)} LP
+                    {token.pairName} ({token.dex}) - {Number(token.balance).toFixed(8)} LP ({prettyNumber(token.userAfroX)} AfroX)
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm text-gray-400 mb-2">Amount to Lock</label>
+              <label className="block text-sm text-gray-400 mb-2">Amount to Lock (LP Tokens)</label>
               <div className="flex gap-2">
                 <input
                   type="number"
                   value={lockAmount}
                   onChange={(e) => setLockAmount(e.target.value)}
                   placeholder="0.0"
+                  step="0.00000001"
                   className="flex-1 p-3 rounded bg-gray-800 text-white border border-gray-700"
                 />
-                <button onClick={() => setLockAmount(selectedToken?.balance || '0')} className="px-4 rounded bg-gray-700 text-sm">MAX</button>
+                <button onClick={() => setLockAmount(String(selectedToken?.balance || '0'))} className="px-4 rounded bg-gray-700 text-sm">MAX</button>
               </div>
+              {selectedToken && (
+                <div className="text-xs text-blue-400 mt-2">
+                  = {prettyNumber(rewards.afroxValue)} AfroX value being locked
+                </div>
+              )}
             </div>
 
-            {/* Rewards Breakdown */}
+            {/* Rewards Breakdown - Based on AfroX VALUE */}
             <div className="bg-gray-800/50 p-4 rounded-lg mb-4">
-              <h3 className="text-sm font-semibold text-orange-400 mb-3">🎁 Rewards Breakdown</h3>
-              <div className="space-y-2 text-sm">
+              <h3 className="text-sm font-semibold text-orange-400 mb-3">
+                🎁 Rewards Breakdown (Based on {prettyNumber(rewards.afroxValue)} AfroX)
+              </h3>
+              <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Lock Duration:</span>
                   <span className="font-bold text-white">{lockDuration} days</span>
                 </div>
                 
-                <div className="flex justify-between p-2 bg-green-900/20 rounded border border-green-500/30">
-                  <span className="text-green-400">⚡ Instant Bonus (5%):</span>
-                  <div className="text-right">
-                    <span className="font-bold text-green-400">{prettyNumber(rewards.instant, 6)} AfroX</span>
-                    {afroxPrice && <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(rewards.instant, afroxPrice))}</div>}
+                {/* INSTANT BONUS - 5% of AfroX value */}
+                <div className="p-3 bg-green-900/20 rounded-lg border border-green-500/30">
+                  <div className="flex justify-between items-start">
+                    <span className="text-green-400 font-semibold">⚡ Instant Bonus ({selectedOption?.instantBonusPct}%):</span>
+                    <div className="text-right">
+                      <span className="font-bold text-green-400 text-lg">{prettyNumber(rewards.instant)} AfroX</span>
+                      {afroxPrice && <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(rewards.instant, afroxPrice))}</div>}
+                    </div>
                   </div>
+                  <div className="text-xs text-green-400 mt-2">✓ Claimable after 7 days</div>
                 </div>
-                <div className="text-xs text-green-400 pl-2">↳ Claimable after 7 days. Your referrer also gets 5%!</div>
+
+                {/* REFERRER BONUS */}
+                <div className="p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
+                  <div className="flex justify-between items-start">
+                    <span className="text-purple-400 font-semibold">👥 Your Referrer Gets:</span>
+                    <div className="text-right">
+                      <span className="font-bold text-purple-400 text-lg">{prettyNumber(rewards.referrerBonus)} AfroX</span>
+                      {afroxPrice && <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(rewards.referrerBonus, afroxPrice))}</div>}
+                    </div>
+                  </div>
+                  <div className="text-xs text-purple-400 mt-2">✓ Claimable after 7 days</div>
+                </div>
                 
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Mining Reward (at unlock):</span>
+                {/* MINING REWARD */}
+                <div className="flex justify-between p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
+                  <span className="text-blue-400 font-semibold">⛏️ Mining Reward ({selectedOption?.miningBonusPct}%):</span>
                   <div className="text-right">
-                    <span className="font-bold text-blue-400">{prettyNumber(rewards.mining, 6)} AfroX</span>
+                    <span className="font-bold text-blue-400 text-lg">{prettyNumber(rewards.mining)} AfroX</span>
                     {afroxPrice && <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(rewards.mining, afroxPrice))}</div>}
                   </div>
                 </div>
+                <div className="text-xs text-blue-400 pl-2">↳ Released at unlock ({lockDuration} days)</div>
                 
-                <div className="flex justify-between border-t border-gray-700 pt-2">
-                  <span className="text-gray-300 font-semibold">Total Rewards:</span>
+                {/* TOTAL */}
+                <div className="flex justify-between border-t border-gray-700 pt-3">
+                  <span className="text-white font-bold">Total Rewards ({selectedOption?.totalApy}% APY):</span>
                   <div className="text-right">
-                    <span className="font-bold text-orange-400">{prettyNumber(rewards.total, 6)} AfroX</span>
+                    <span className="font-bold text-orange-400 text-xl">{prettyNumber(rewards.total)} AfroX</span>
                     {afroxPrice && <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(rewards.total, afroxPrice))}</div>}
                   </div>
                 </div>
@@ -425,7 +499,7 @@ export default function LPMiningDashboard({ afroxPrice }) {
               </div>
               <div className="text-right">
                 <div className="text-sm font-bold text-blue-400">{prettyNumber(item.totalLP)} LP</div>
-                <div className="text-xs text-green-400">{prettyNumber(item.rewards)} AfroX</div>
+                <div className="text-xs text-green-400">{prettyNumber(item.rewards)} AfroX earned</div>
               </div>
             </div>
           ))}
@@ -438,15 +512,15 @@ export default function LPMiningDashboard({ afroxPrice }) {
         <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-300">
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">🔒 Lock Your LP Tokens</h3>
-            <p>Deposit Uniswap/SushiSwap LP tokens for 30-365 days. Longer locks = higher rewards!</p>
+            <p>Deposit Uniswap/SushiSwap LP tokens for 30-365 days. Rewards are calculated based on your <strong>AfroX value</strong> in the LP position!</p>
           </div>
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">🎁 Instant Bonus (5%)</h3>
-            <p>Claim <strong>5% bonus</strong> after 7 days. Your referrer also gets 5% - double rewards!</p>
+            <p>Receive <strong>5% of your AfroX value</strong> as instant bonus. Claimable after 7 days. Your referrer also gets half!</p>
           </div>
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">⛏️ Mining Rewards</h3>
-            <p>Earn 5-150% mining rewards based on lock duration. Released at unlock.</p>
+            <p>Earn 5-150% additional mining rewards based on lock duration. Released when you unlock.</p>
           </div>
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">⚠️ Early Unlock</h3>
