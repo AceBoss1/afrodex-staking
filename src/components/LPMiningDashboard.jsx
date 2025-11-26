@@ -208,7 +208,7 @@ export default function LPMiningDashboard({ afroxPrice }) {
     const instantBonus = afroxValue * (option.instantBonusPct / 100);      // 5% of AfroX value
     const miningReward = afroxValue * (option.miningBonusPct / 100);       // Variable based on duration
     const totalReward = afroxValue * (option.totalApy / 100);             // Total APY
-    const referrerBonus = instantBonus / 2;                                // Referrer gets 50% of instant bonus
+    const referrerBonus = afroxValue * (option.instantBonusPct / 100);    // Referrer ALSO gets 5% (same as instant bonus)
     
     return {
       instant: instantBonus,
@@ -419,10 +419,10 @@ export default function LPMiningDashboard({ afroxPrice }) {
                   <div className="text-xs text-green-400 mt-2">✓ Claimable after 7 days</div>
                 </div>
 
-                {/* REFERRER BONUS */}
+                {/* REFERRER BONUS - Also 5% */}
                 <div className="p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
                   <div className="flex justify-between items-start">
-                    <span className="text-purple-400 font-semibold">👥 Your Referrer Gets:</span>
+                    <span className="text-purple-400 font-semibold">👥 Your Referrer Gets ({selectedOption?.instantBonusPct}%):</span>
                     <div className="text-right">
                       <span className="font-bold text-purple-400 text-lg">{prettyNumber(rewards.referrerBonus)} AfroX</span>
                       {afroxPrice && <div className="text-xs text-gray-500">≈ {formatUSD(calculateUSDValue(rewards.referrerBonus, afroxPrice))}</div>}
@@ -516,7 +516,7 @@ export default function LPMiningDashboard({ afroxPrice }) {
           </div>
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">🎁 Instant Bonus (5%)</h3>
-            <p>Receive <strong>5% of your AfroX value</strong> as instant bonus. Claimable after 7 days. Your referrer also gets half!</p>
+            <p>Receive <strong>5% of your AfroX value</strong> as instant bonus. Claimable after 7 days. Your referrer also gets <strong>5%</strong>!</p>
           </div>
           <div>
             <h3 className="font-semibold text-orange-400 mb-2">⛏️ Mining Rewards</h3>
