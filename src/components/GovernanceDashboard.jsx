@@ -81,7 +81,7 @@ Vote FOR to approve AfroChain development. Vote AGAINST to reject this proposal.
 • ZK Stack for custom chains (Hyperchains)
 • Best-in-class privacy potential
 
-**🤖 echnical Advisors Recommendation:**
+**🤖 Technical Advisors Recommendation:**
 
 After analyzing all factors, **Arbitrum with Arbitrum Orbit** is recommended as the optimal choice for AfroChain L3 development:
 
@@ -95,7 +95,7 @@ After analyzing all factors, **Arbitrum with Arbitrum Orbit** is recommended as 
 
 However, **zkSync** is a strong second choice if privacy features are prioritized, as ZK technology offers native privacy advantages.
 
-**Voting:** Select your preferred L2 platform in the comments or use the voting buttons.`,
+**Voting:** Select your preferred L2 platform below.`,
     category: 'development',
     proposer: '0xbd9636615ADa9bFC6A7D878784BD1d06C75Ee19B',
     votingDurationDays: 14,
@@ -158,7 +158,6 @@ export default function GovernanceDashboard({ stakedBalance, badgeTier, afroxPri
       }
     } catch (e) {
       console.error('Error loading proposals:', e);
-      // Keep initial proposals if Supabase fails
     } finally {
       setLoading(false);
     }
