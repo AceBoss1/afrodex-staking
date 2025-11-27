@@ -34,10 +34,10 @@ Building as an L3 allows us to:
 4. Implement AfroX-specific features natively
 
 **Roadmap:**
-• Q1 2025: Technical specification and architecture design
-• Q2 2025: Testnet launch
-• Q3 2025: Security audits and bug bounties
-• Q4 2025: Mainnet launch
+• Q1 2026: Technical specification and architecture design
+• Q3 2026: Testnet launch
+• Q4 2026: Security audits and bug bounties
+• Q1 2027: Mainnet launch
 
 Vote FOR to approve AfroChain development. Vote AGAINST to reject this proposal.`,
     category: 'development',
