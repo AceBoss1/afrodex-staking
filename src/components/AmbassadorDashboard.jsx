@@ -17,7 +17,6 @@ const LEVEL_COLORS = {
   5: { bg: 'bg-red-500/20', border: 'border-red-500', text: 'text-red-400', label: 'L5' }
 };
 
-// Generate referral code from address
 function generateReferralCode(address) {
   if (!address) return '';
   return address.slice(2, 10).toUpperCase();
@@ -43,7 +42,6 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
     try {
       const code = generateReferralCode(address);
       setReferralCode(code);
-      // Use dynamic referral link that picks up current domain
       setReferralLink(createDynamicReferralLink(code));
       
       const ambassadorStats = await getAmbassadorStats(address);
