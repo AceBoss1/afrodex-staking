@@ -1,6 +1,6 @@
 // src/app/layout.js
 import { Inter } from 'next/font/google';
-import './globals.css';
+import '../styles/globals.css';
 import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -38,10 +38,6 @@ export const metadata = {
     title: 'AfroX DeFi Hub | Stake, Mint, Mine, Swap, Earn & Govern',
     description: 'Your all-in-one DeFi platform for AfroX ecosystem',
     images: ['/afrodex_logoA.png'],
-  },
-  robots: {
-    index: true,
-    follow: true,
   },
 };
 
