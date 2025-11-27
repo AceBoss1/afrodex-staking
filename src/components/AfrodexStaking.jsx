@@ -11,6 +11,7 @@ import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } f
 import AmbassadorDashboard from './AmbassadorDashboard';
 import LPMiningDashboard from './LPMiningDashboard';
 import GovernanceDashboard from './GovernanceDashboard';
+import AfroSwap from './AfroSwap';
 import { getAfroxPriceUSD, formatUSD, calculateUSDValue } from '../lib/priceUtils';
 
 const TOKEN_LOGO = '/afrodex_token.png';
@@ -133,6 +134,7 @@ export default function AfrodexStaking() {
   const [alertMsg, setAlertMsg] = useState(null);
   const [afroxPrice, setAfroxPrice] = useState(null);
   const [activeTab, setActiveTab] = useState('staking');
+  const [showAfroSwap, setShowAfroSwap] = useState(false);
 
   const shortAddr = (a) => (a ? `${a.slice(0, 6)}...${a.slice(-4)}` : '—');
   const showAlert = (m, t = 6000) => { setAlertMsg(String(m)); setTimeout(() => setAlertMsg(null), t); };
@@ -290,7 +292,7 @@ export default function AfrodexStaking() {
         <div className="flex gap-4 mb-6 flex-wrap">
           <button onClick={() => setActiveTab('staking')} className={`px-3 py-2 rounded ${activeTab === 'staking' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroX Staking Dashboard</button>
           <button onClick={() => setActiveTab('lp-mining')} className={`px-3 py-2 rounded ${activeTab === 'lp-mining' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>LP Token Lock-Mining Dashboard</button>
-          <a href="https://dex.afrox.one/" target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded bg-gray-900 text-gray-300 hover:bg-orange-600 hover:text-black">AfroSwap</a>
+          <button onClick={() => setShowAfroSwap(true)} className="px-3 py-2 rounded bg-gradient-to-r from-orange-500 to-yellow-500 text-black font-semibold hover:from-orange-600 hover:to-yellow-600">🔄 AfroSwap</button>
           <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Ambassador Dashboard</button>
           <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Community of Trust Dashboard</button>
         </div>
@@ -409,7 +411,7 @@ export default function AfrodexStaking() {
 
               <footer className="border-t border-gray-800 py-6 mt-6">
                 <div className="max-w-6xl mx-auto px-6 text-center text-sm text-gray-400">
-                  © 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
+                  © 2019-2025 AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
                 </div>
               </footer>
             </div>
@@ -422,6 +424,9 @@ export default function AfrodexStaking() {
       </main>
 
       {alertMsg && <div className="fixed right-4 bottom-4 bg-[#0b0b0b] border border-orange-500 text-orange-300 p-3 rounded shadow-lg z-50">{alertMsg}</div>}
+      
+      {/* AfroSwap Modal */}
+      {showAfroSwap && <AfroSwap afroxPrice={afroxPrice} onClose={() => setShowAfroSwap(false)} />}
     </div>
   );
 }
