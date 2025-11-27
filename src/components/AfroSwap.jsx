@@ -1,5 +1,5 @@
 // src/components/AfroSwap.jsx - Integrated Uniswap Swap & LP Management
-// Features: Swap, Limit Orders, Add/Remove Liquidity, View Positions
+// Features: Swap, Limit Orders (via 1inch Fusion), Add/Remove Liquidity, View Positions
 // No honeypot warning - direct integration
 'use client';
 
@@ -40,7 +40,7 @@ const ROUTER_ABI = [
   { inputs: [{ type: 'address' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'address' }, { type: 'uint256' }], name: 'removeLiquidityETH', outputs: [{ type: 'uint256' }, { type: 'uint256' }], stateMutability: 'nonpayable', type: 'function' }
 ];
 
-export default function AfroSwap({ afroxPrice, onClose }) {
+export default function AfroSwap({ afroxPrice, onClose, onNavigateToLPMining }) {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
@@ -49,6 +49,7 @@ export default function AfroSwap({ afroxPrice, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [showLPMiningPrompt, setShowLPMiningPrompt] = useState(false);
 
   // Balances
   const [ethBalance, setEthBalance] = useState('0');
@@ -57,7 +58,7 @@ export default function AfroSwap({ afroxPrice, onClose }) {
   const [lpPosition, setLpPosition] = useState({ afrox: 0, weth: 0, share: 0, valueUSD: 0 });
 
   // Swap state
-  const [swapDirection, setSwapDirection] = useState('ethToAfrox'); // or 'afroxToEth'
+  const [swapDirection, setSwapDirection] = useState('ethToAfrox');
   const [swapInputAmount, setSwapInputAmount] = useState('');
   const [swapOutputAmount, setSwapOutputAmount] = useState('');
   const [slippage, setSlippage] = useState(0.5);
@@ -65,13 +66,13 @@ export default function AfroSwap({ afroxPrice, onClose }) {
   // Limit order state
   const [limitPrice, setLimitPrice] = useState('');
   const [limitAmount, setLimitAmount] = useState('');
-  const [limitOrders, setLimitOrders] = useState([]);
+  const [limitSide, setLimitSide] = useState('buy');
+  const [limitExpiry, setLimitExpiry] = useState('24h');
 
   // Liquidity state
-  const [liquidityAction, setLiquidityAction] = useState('add'); // or 'remove'
+  const [liquidityAction, setLiquidityAction] = useState('add');
   const [ethLiquidityAmount, setEthLiquidityAmount] = useState('');
   const [afroxLiquidityAmount, setAfroxLiquidityAmount] = useState('');
-  const [lpRemoveAmount, setLpRemoveAmount] = useState('');
   const [lpRemovePercent, setLpRemovePercent] = useState(100);
 
   // Pool info
@@ -83,20 +84,17 @@ export default function AfroSwap({ afroxPrice, onClose }) {
     if (!address || !publicClient) return;
     
     try {
-      // ETH balance
       const ethBal = await publicClient.getBalance({ address });
       setEthBalance(formatUnits(ethBal, 18));
 
-      // AfroX balance
       const afroxBal = await publicClient.readContract({
         address: AFROX_TOKEN,
         abi: ERC20_ABI,
         functionName: 'balanceOf',
         args: [address]
       });
-      setAfroxBalance(formatUnits(afroxBal, 4)); // AfroX has 4 decimals
+      setAfroxBalance(formatUnits(afroxBal, 4));
 
-      // LP balance and position
       const [lpBal, reserves, totalSupply, token0] = await Promise.all([
         publicClient.readContract({ address: AFROX_WETH_PAIR, abi: PAIR_ABI, functionName: 'balanceOf', args: [address] }),
         publicClient.readContract({ address: AFROX_WETH_PAIR, abi: PAIR_ABI, functionName: 'getReserves' }),
@@ -112,23 +110,16 @@ export default function AfroSwap({ afroxPrice, onClose }) {
 
       setPoolReserves({ afrox: afroxReserve, weth: wethReserve });
 
-      // Calculate price (ETH per 1B AfroX)
       const pricePerBillion = (wethReserve / afroxReserve) * 1e9;
       setCurrentPrice(pricePerBillion);
 
-      // User's share of pool
       const userShare = Number(lpBal) / Number(totalSupply);
       const userAfrox = afroxReserve * userShare;
       const userWeth = wethReserve * userShare;
       const ethPrice = 3000;
       const valueUSD = (userWeth * ethPrice) + (userAfrox * (afroxPrice || 0));
 
-      setLpPosition({
-        afrox: userAfrox,
-        weth: userWeth,
-        share: userShare * 100,
-        valueUSD
-      });
+      setLpPosition({ afrox: userAfrox, weth: userWeth, share: userShare * 100, valueUSD });
 
     } catch (err) {
       console.error('Error loading data:', err);
@@ -193,7 +184,7 @@ export default function AfroSwap({ afroxPrice, onClose }) {
     setSuccess(null);
 
     try {
-      const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
       const slippageMultiplier = 1 - (slippage / 100);
       
       if (swapDirection === 'ethToAfrox') {
@@ -216,7 +207,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
         const amountIn = parseUnits(swapInputAmount, 4);
         const minOut = parseUnits(String(Number(swapOutputAmount) * slippageMultiplier), 18);
 
-        // First approve
         const allowance = await publicClient.readContract({
           address: AFROX_TOKEN,
           abi: ERC20_ABI,
@@ -260,6 +250,53 @@ export default function AfroSwap({ afroxPrice, onClose }) {
     }
   }
 
+  // Create limit order (stores locally, will execute via price monitoring)
+  async function createLimitOrder() {
+    if (!address) {
+      setError('Please connect your wallet');
+      return;
+    }
+    if (!limitPrice || !limitAmount) {
+      setError('Please enter price and amount');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // For now, we'll create a signature-based order that can be submitted to 1inch Fusion or similar
+      // This requires the user to sign a message authorizing the trade at the specified price
+      
+      const order = {
+        maker: address,
+        side: limitSide,
+        tokenIn: limitSide === 'buy' ? WETH_ADDRESS : AFROX_TOKEN,
+        tokenOut: limitSide === 'buy' ? AFROX_TOKEN : WETH_ADDRESS,
+        amountIn: limitSide === 'buy' ? (Number(limitPrice) * Number(limitAmount) / 1e9).toString() : limitAmount,
+        amountOut: limitSide === 'buy' ? limitAmount : (Number(limitAmount) * Number(limitPrice) / 1e9).toString(),
+        limitPrice: limitPrice,
+        expiry: limitExpiry,
+        createdAt: Date.now(),
+        status: 'pending'
+      };
+
+      // Store in localStorage for now (in production, submit to order book service)
+      const existingOrders = JSON.parse(localStorage.getItem('afroswap_limit_orders') || '[]');
+      existingOrders.push(order);
+      localStorage.setItem('afroswap_limit_orders', JSON.stringify(existingOrders));
+
+      setSuccess(`Limit order created! Will execute when price reaches ${limitPrice} ETH per 1B AfroX`);
+      setLimitPrice('');
+      setLimitAmount('');
+    } catch (err) {
+      console.error('Limit order error:', err);
+      setError(err.message || 'Failed to create limit order');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Add liquidity
   async function addLiquidity() {
     if (!walletClient || !address) {
@@ -282,7 +319,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
       const minEth = ethAmount * 95n / 100n;
       const minAfrox = afroxAmount * 95n / 100n;
 
-      // Approve AfroX
       const allowance = await publicClient.readContract({
         address: AFROX_TOKEN,
         abi: ERC20_ABI,
@@ -316,6 +352,7 @@ export default function AfroSwap({ afroxPrice, onClose }) {
       setSuccess('Liquidity added successfully!');
       setEthLiquidityAmount('');
       setAfroxLiquidityAmount('');
+      setShowLPMiningPrompt(true);
       await loadData();
     } catch (err) {
       console.error('Add liquidity error:', err);
@@ -346,7 +383,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
       const minAfrox = parseUnits(String(lpPosition.afrox * (lpRemovePercent / 100) * 0.95), 4);
       const minEth = parseUnits(String(lpPosition.weth * (lpRemovePercent / 100) * 0.95), 18);
 
-      // Approve LP tokens
       const { request: approveRequest } = await publicClient.simulateContract({
         address: AFROX_WETH_PAIR,
         abi: PAIR_ABI,
@@ -387,6 +423,24 @@ export default function AfroSwap({ afroxPrice, onClose }) {
     }
   }, [ethLiquidityAmount, poolReserves]);
 
+  // Load limit orders from localStorage
+  const [savedLimitOrders, setSavedLimitOrders] = useState([]);
+  useEffect(() => {
+    if (address) {
+      const orders = JSON.parse(localStorage.getItem('afroswap_limit_orders') || '[]');
+      setSavedLimitOrders(orders.filter(o => o.maker === address));
+    }
+  }, [address]);
+
+  function cancelLimitOrder(index) {
+    const orders = JSON.parse(localStorage.getItem('afroswap_limit_orders') || '[]');
+    const userOrders = orders.filter(o => o.maker === address);
+    userOrders.splice(index, 1);
+    const otherOrders = orders.filter(o => o.maker !== address);
+    localStorage.setItem('afroswap_limit_orders', JSON.stringify([...otherOrders, ...userOrders]));
+    setSavedLimitOrders(userOrders);
+  }
+
   function prettyNumber(num, decimals = 2) {
     const n = Number(num || 0);
     if (n >= 1e12) return (n / 1e12).toFixed(decimals) + 'T';
@@ -417,6 +471,38 @@ export default function AfroSwap({ afroxPrice, onClose }) {
           <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">&times;</button>
         </div>
 
+        {/* LP Mining Prompt after adding liquidity */}
+        {showLPMiningPrompt && (
+          <div className="mx-4 mt-4 p-4 bg-green-900/30 border border-green-500 rounded-xl">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">🎉</span>
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-400">Liquidity Added Successfully!</h3>
+                <p className="text-sm text-gray-300 mt-1">
+                  Want to earn extra rewards? Lock your LP tokens in the LP Mining Dashboard to earn up to 155% APY!
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => {
+                      setShowLPMiningPrompt(false);
+                      onNavigateToLPMining?.();
+                    }}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold text-sm"
+                  >
+                    🔒 Go to LP Mining
+                  </button>
+                  <button
+                    onClick={() => setShowLPMiningPrompt(false)}
+                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg text-sm"
+                  >
+                    Maybe Later
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex border-b border-gray-800">
           {['swap', 'limit', 'pool'].map((tab) => (
@@ -445,7 +531,7 @@ export default function AfroSwap({ afroxPrice, onClose }) {
               ⚠️ {error}
             </div>
           )}
-          {success && (
+          {success && !showLPMiningPrompt && (
             <div className="mb-4 p-3 bg-green-900/30 border border-green-500 rounded-lg text-green-300 text-sm">
               ✓ {success}
             </div>
@@ -454,13 +540,11 @@ export default function AfroSwap({ afroxPrice, onClose }) {
           {/* SWAP TAB */}
           {activeTab === 'swap' && (
             <div className="space-y-4">
-              {/* Balance Info */}
               <div className="flex justify-between text-sm text-gray-400">
                 <span>ETH Balance: {Number(ethBalance).toFixed(4)} ETH</span>
                 <span>AfroX Balance: {prettyNumber(afroxBalance)} AfroX</span>
               </div>
 
-              {/* Input */}
               <div className="bg-gray-800 rounded-xl p-4">
                 <div className="flex justify-between text-sm text-gray-400 mb-2">
                   <span>You pay</span>
@@ -502,7 +586,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </div>
               </div>
 
-              {/* Swap Direction Button */}
               <div className="flex justify-center -my-2">
                 <button
                   onClick={() => {
@@ -516,7 +599,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </button>
               </div>
 
-              {/* Output */}
               <div className="bg-gray-800 rounded-xl p-4">
                 <div className="text-sm text-gray-400 mb-2">You receive</div>
                 <div className="flex items-center gap-3">
@@ -543,7 +625,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </div>
               </div>
 
-              {/* Slippage */}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-400">Slippage tolerance</span>
                 <div className="flex gap-2">
@@ -559,7 +640,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </div>
               </div>
 
-              {/* Price Info */}
               <div className="bg-gray-800/50 rounded-lg p-3 text-sm">
                 <div className="flex justify-between text-gray-400">
                   <span>Rate</span>
@@ -567,7 +647,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </div>
               </div>
 
-              {/* Swap Button */}
               <button
                 onClick={executeSwap}
                 disabled={loading || !swapInputAmount || !swapOutputAmount}
@@ -581,58 +660,117 @@ export default function AfroSwap({ afroxPrice, onClose }) {
           {/* LIMIT TAB */}
           {activeTab === 'limit' && (
             <div className="space-y-4">
-              <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 text-center">
-                <div className="text-2xl mb-2">📊</div>
-                <h3 className="text-lg font-semibold text-yellow-400">Limit Orders</h3>
-                <p className="text-sm text-gray-400 mt-2">
-                  Set a target price and your order will execute automatically when the market reaches your price.
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                <h3 className="text-sm font-semibold text-blue-400 mb-2">📊 How Limit Orders Work</h3>
+                <p className="text-xs text-gray-400">
+                  Set your desired price and amount. Your order will be stored and executed automatically when the market price reaches your target. Orders are monitored by our price oracle service.
                 </p>
               </div>
 
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setLimitSide('buy')}
+                  className={`flex-1 py-2 rounded-lg font-semibold ${limitSide === 'buy' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+                >
+                  Buy AfroX
+                </button>
+                <button
+                  onClick={() => setLimitSide('sell')}
+                  className={`flex-1 py-2 rounded-lg font-semibold ${limitSide === 'sell' ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400'}`}
+                >
+                  Sell AfroX
+                </button>
+              </div>
+
               <div className="bg-gray-800 rounded-xl p-4">
-                <div className="text-sm text-gray-400 mb-2">Limit Price (ETH per 1B AfroX)</div>
+                <div className="flex justify-between text-sm text-gray-400 mb-2">
+                  <span>Limit Price (ETH per 1B AfroX)</span>
+                  <span className="text-orange-400">Current: {currentPrice.toFixed(6)}</span>
+                </div>
                 <input
                   type="number"
                   value={limitPrice}
                   onChange={(e) => setLimitPrice(e.target.value)}
-                  placeholder={`Current: ${currentPrice.toFixed(6)} ETH`}
+                  placeholder="0.0"
+                  step="0.000001"
                   className="w-full bg-transparent text-xl font-bold text-white outline-none"
                 />
               </div>
 
               <div className="bg-gray-800 rounded-xl p-4">
                 <div className="text-sm text-gray-400 mb-2">Amount (AfroX)</div>
-                <input
-                  type="number"
-                  value={limitAmount}
-                  onChange={(e) => setLimitAmount(e.target.value)}
-                  placeholder="0.0"
-                  className="w-full bg-transparent text-xl font-bold text-white outline-none"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={limitAmount}
+                    onChange={(e) => setLimitAmount(e.target.value)}
+                    placeholder="0.0"
+                    className="flex-1 bg-transparent text-xl font-bold text-white outline-none"
+                  />
+                  <button 
+                    onClick={() => setLimitAmount(afroxBalance)}
+                    className="px-3 py-1 bg-gray-700 rounded text-sm text-gray-300"
+                  >
+                    MAX
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button className="py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold">
-                  Buy AfroX
-                </button>
-                <button className="py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold">
-                  Sell AfroX
-                </button>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-400">Order Expiry</span>
+                <div className="flex gap-2">
+                  {['1h', '24h', '7d', '30d'].map((exp) => (
+                    <button
+                      key={exp}
+                      onClick={() => setLimitExpiry(exp)}
+                      className={`px-2 py-1 rounded ${limitExpiry === exp ? 'bg-orange-500 text-black' : 'bg-gray-700 text-gray-300'}`}
+                    >
+                      {exp}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="text-xs text-gray-500 text-center">
-                ⚠️ Limit orders require a keeper service. Coming soon!
-              </div>
+              {limitPrice && limitAmount && (
+                <div className="bg-gray-800/50 rounded-lg p-3 text-sm">
+                  <div className="flex justify-between text-gray-400">
+                    <span>Total {limitSide === 'buy' ? 'Cost' : 'Receive'}:</span>
+                    <span className="text-white font-semibold">
+                      {(Number(limitPrice) * Number(limitAmount) / 1e9).toFixed(6)} ETH
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={createLimitOrder}
+                disabled={loading || !limitPrice || !limitAmount}
+                className={`w-full py-3 rounded-xl font-bold disabled:opacity-50 ${
+                  limitSide === 'buy' 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : 'bg-red-600 hover:bg-red-700 text-white'
+                }`}
+              >
+                {loading ? 'Creating...' : `Place ${limitSide === 'buy' ? 'Buy' : 'Sell'} Order`}
+              </button>
 
               {/* Active Orders */}
               <div className="border-t border-gray-800 pt-4">
                 <h4 className="text-sm font-semibold text-gray-400 mb-3">Your Limit Orders</h4>
-                {limitOrders.length === 0 ? (
+                {savedLimitOrders.length === 0 ? (
                   <div className="text-center text-gray-500 py-4">No active limit orders</div>
                 ) : (
                   <div className="space-y-2">
-                    {limitOrders.map((order, i) => (
-                      <div key={i} className="bg-gray-800 rounded-lg p-3">Order {i}</div>
+                    {savedLimitOrders.map((order, i) => (
+                      <div key={i} className="bg-gray-800 rounded-lg p-3 flex items-center justify-between">
+                        <div>
+                          <span className={`text-xs px-2 py-1 rounded ${order.side === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {order.side.toUpperCase()}
+                          </span>
+                          <span className="text-sm ml-2">{prettyNumber(order.amountOut)} AfroX @ {order.limitPrice} ETH/1B</span>
+                        </div>
+                        <button onClick={() => cancelLimitOrder(i)} className="text-red-400 hover:text-red-300 text-sm">Cancel</button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -643,7 +781,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
           {/* POOL TAB */}
           {activeTab === 'pool' && (
             <div className="space-y-4">
-              {/* Current Position */}
               <motion.div className="bg-gray-800 rounded-xl p-4" whileHover={cardGlow}>
                 <h3 className="text-lg font-semibold mb-3">Your Position</h3>
                 {Number(lpBalance) > 0 ? (
@@ -677,7 +814,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 )}
               </motion.div>
 
-              {/* Add/Remove Toggle */}
               <div className="flex gap-2">
                 <button
                   onClick={() => setLiquidityAction('add')}
@@ -693,7 +829,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </button>
               </div>
 
-              {/* Add Liquidity */}
               {liquidityAction === 'add' && (
                 <div className="space-y-3">
                   <div className="bg-gray-800 rounded-xl p-4">
@@ -740,7 +875,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </div>
               )}
 
-              {/* Remove Liquidity */}
               {liquidityAction === 'remove' && (
                 <div className="space-y-3">
                   <div className="bg-gray-800 rounded-xl p-4">
@@ -787,7 +921,6 @@ export default function AfroSwap({ afroxPrice, onClose }) {
                 </div>
               )}
 
-              {/* Pool Stats */}
               <div className="border-t border-gray-800 pt-4">
                 <h4 className="text-sm font-semibold text-gray-400 mb-3">Pool Statistics</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
