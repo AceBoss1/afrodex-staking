@@ -1,5 +1,5 @@
 // src/components/AfrodexStaking.jsx - COMPLETE UPDATED VERSION
-// FIXED: New header with two different logos
+// FIXED: New header with two different logos on the left and the right
 // FIXED: Added notes on Unstake & Reward Projections
 // FIXED: Footer with social links
 // FIXED: URL routing using query params for Next.js compatibility
