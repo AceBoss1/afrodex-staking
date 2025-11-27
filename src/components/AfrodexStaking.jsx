@@ -1,10 +1,14 @@
 // src/components/AfrodexStaking.jsx - COMPLETE FIXED VERSION
+// FIXED: URL routing for direct tab access
+// FIXED: Shared footer across all dashboards
+// FIXED: Header layout improved
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 import { STAKING_ABI, AFROX_PROXY_ABI } from '../lib/abis';
 import { STAKING_ADDRESS, TOKEN_ADDRESS, readContractSafe, writeContractSafe } from '../lib/contracts';
@@ -43,6 +47,22 @@ export function getBadgeTierFromStake(stakedBalance) {
     if (staked >= tier.minStake) return tier;
   }
   return BADGE_TIERS[BADGE_TIERS.length - 1];
+}
+
+// Shared Footer Component
+export function SharedFooter() {
+  return (
+    <footer className="border-t border-gray-800 py-6 mt-8">
+      <div className="max-w-6xl mx-auto px-6">
+        <div className="p-4 bg-[#0b0b0b] rounded border border-gray-800 text-sm text-gray-300 mb-4">
+          ⚠️ <strong>Important Disclaimer:</strong> By using this platform you confirm you are of legal age, live in a jurisdiction where the specific crypto related activity you want to perform is permitted, and accept all liability and risk.
+        </div>
+        <div className="text-center text-sm text-gray-400">
+          © 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
+        </div>
+      </div>
+    </footer>
+  );
 }
 
 // Token Analytics Donut Chart
@@ -113,10 +133,21 @@ function TokenAnalyticsChart({ currentSupply, rewardsMinted, maxSupply }) {
   );
 }
 
+// Tab configuration for URL routing
+const TAB_CONFIG = {
+  staking: { path: '/staking', label: 'AfroX Staking Dashboard' },
+  'lp-mining': { path: '/lp-mining', label: 'LP Token Lock-Mining Dashboard' },
+  ambassador: { path: '/ambassador', label: 'Ambassador Dashboard' },
+  governance: { path: '/governance', label: 'Community of Trust Dashboard' }
+};
+
 export default function AfrodexStaking() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [decimals, setDecimals] = useState(DEFAULT_DECIMALS);
   const [walletBalance, setWalletBalance] = useState('0');
@@ -133,8 +164,32 @@ export default function AfrodexStaking() {
   const [txHash, setTxHash] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
   const [afroxPrice, setAfroxPrice] = useState(null);
-  const [activeTab, setActiveTab] = useState('staking');
   const [showAfroSwap, setShowAfroSwap] = useState(false);
+
+  // URL-based tab routing
+  const [activeTab, setActiveTab] = useState('staking');
+
+  // Parse URL to set active tab
+  useEffect(() => {
+    const path = pathname?.replace('/', '') || '';
+    const tabParam = searchParams?.get('tab');
+    
+    if (tabParam && TAB_CONFIG[tabParam]) {
+      setActiveTab(tabParam);
+    } else if (path && TAB_CONFIG[path]) {
+      setActiveTab(path);
+    } else if (path === '' || path === 'staking') {
+      setActiveTab('staking');
+    }
+  }, [pathname, searchParams]);
+
+  // Update URL when tab changes
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    // Update URL without full page reload
+    const newUrl = tab === 'staking' ? '/' : `/${tab}`;
+    window.history.pushState({}, '', newUrl);
+  };
 
   const shortAddr = (a) => (a ? `${a.slice(0, 6)}...${a.slice(-4)}` : '—');
   const showAlert = (m, t = 6000) => { setAlertMsg(String(m)); setTimeout(() => setAlertMsg(null), t); };
@@ -279,26 +334,58 @@ export default function AfrodexStaking() {
 
   return (
     <div className="min-h-screen w-full bg-black text-white antialiased">
+      {/* Header */}
       <header className="max-w-6xl mx-auto px-6 py-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">AfroX Staking Dashboard</h1>
-          <p className="text-sm text-orange-300/80">Stake AfroX and earn rewards</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-orange-400">AFRODEX Hub</h1>
+          <p className="text-sm text-gray-400">Stake, Swap, Earn & Govern</p>
         </div>
         <div className="text-xs text-gray-300">{isConnected ? shortAddr(address) : 'Not connected'}</div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 pb-12">
+      <main className="max-w-6xl mx-auto px-6 pb-4">
         {/* Navigation Tabs */}
-        <div className="flex gap-4 mb-6 flex-wrap">
-          <button onClick={() => setActiveTab('staking')} className={`px-3 py-2 rounded ${activeTab === 'staking' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>AfroX Staking Dashboard</button>
-          <button onClick={() => setActiveTab('lp-mining')} className={`px-3 py-2 rounded ${activeTab === 'lp-mining' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>LP Token Lock-Mining Dashboard</button>
-          <button onClick={() => setShowAfroSwap(true)} className="px-3 py-2 rounded bg-gradient-to-r from-orange-500 to-yellow-500 text-black font-semibold hover:from-orange-600 hover:to-yellow-600">🔄 AfroSwap</button>
-          <button onClick={() => setActiveTab('ambassador')} className={`px-3 py-2 rounded ${activeTab === 'ambassador' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Ambassador Dashboard</button>
-          <button onClick={() => setActiveTab('governance')} className={`px-3 py-2 rounded ${activeTab === 'governance' ? 'bg-orange-600 text-black' : 'bg-gray-900 text-gray-300'}`}>Community of Trust Dashboard</button>
+        <div className="flex gap-3 mb-6 flex-wrap">
+          <button 
+            onClick={() => handleTabChange('staking')} 
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'staking' ? 'bg-orange-500 text-black' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'}`}
+          >
+            AfroX Staking Dashboard
+          </button>
+          <button 
+            onClick={() => handleTabChange('lp-mining')} 
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'lp-mining' ? 'bg-orange-500 text-black' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'}`}
+          >
+            LP Token Lock-Mining Dashboard
+          </button>
+          <button 
+            onClick={() => setShowAfroSwap(true)} 
+            className="px-4 py-2 rounded-lg font-medium bg-gradient-to-r from-orange-500 to-yellow-500 text-black hover:from-orange-600 hover:to-yellow-600"
+          >
+            🔄 AfroSwap
+          </button>
+          <button 
+            onClick={() => handleTabChange('ambassador')} 
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'ambassador' ? 'bg-orange-500 text-black' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'}`}
+          >
+            Ambassador Dashboard
+          </button>
+          <button 
+            onClick={() => handleTabChange('governance')} 
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${activeTab === 'governance' ? 'bg-orange-500 text-black' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'}`}
+          >
+            Community of Trust Dashboard
+          </button>
         </div>
 
         {activeTab === 'staking' && (
           <>
+            {/* Dashboard Title */}
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-gray-300">AfroX Staking Dashboard</h2>
+              <p className="text-sm text-gray-500">Stake AfroX and earn rewards</p>
+            </div>
+
             {/* Stats Cards */}
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <motion.div className="bg-gray-900 p-4 rounded-2xl border border-orange-600/10" whileHover={cardGlow}>
@@ -403,30 +490,49 @@ export default function AfrodexStaking() {
               <TokenAnalyticsChart currentSupply={totalSupply} rewardsMinted={totalStakeRewardMinted} maxSupply={maximumSupply} />
             </section>
 
-            {/* Disclaimer and Footer */}
-            <div className="mt-6">
-              <div className="p-4 bg-[#0b0b0b] rounded border border-gray-800 text-sm text-gray-300">
-                ⚠️ <strong>Important Disclaimer:</strong> By using this platform you confirm you are of legal age, live in a jurisdiction where staking crypto is permitted, and accept all liability and risk.
-              </div>
-
-              <footer className="border-t border-gray-800 py-6 mt-6">
-                <div className="max-w-6xl mx-auto px-6 text-center text-sm text-gray-400">
-                  © 2019-2025 AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
-                </div>
-              </footer>
-            </div>
+            {/* Footer for Staking Tab */}
+            <SharedFooter />
           </>
         )}
 
-        {activeTab === 'lp-mining' && <LPMiningDashboard afroxPrice={afroxPrice} />}
-        {activeTab === 'ambassador' && <AmbassadorDashboard stakedBalance={stakedBalance} badgeTier={badgeTier} afroxPrice={afroxPrice} />}
-        {activeTab === 'governance' && <GovernanceDashboard stakedBalance={stakedBalance} badgeTier={badgeTier} afroxPrice={afroxPrice} />}
+        {activeTab === 'lp-mining' && (
+          <>
+            <LPMiningDashboard 
+              afroxPrice={afroxPrice} 
+              onNavigateToLPMining={() => handleTabChange('lp-mining')}
+            />
+            <SharedFooter />
+          </>
+        )}
+
+        {activeTab === 'ambassador' && (
+          <>
+            <AmbassadorDashboard stakedBalance={stakedBalance} badgeTier={badgeTier} afroxPrice={afroxPrice} />
+            <SharedFooter />
+          </>
+        )}
+
+        {activeTab === 'governance' && (
+          <>
+            <GovernanceDashboard stakedBalance={stakedBalance} badgeTier={badgeTier} afroxPrice={afroxPrice} />
+            <SharedFooter />
+          </>
+        )}
       </main>
 
       {alertMsg && <div className="fixed right-4 bottom-4 bg-[#0b0b0b] border border-orange-500 text-orange-300 p-3 rounded shadow-lg z-50">{alertMsg}</div>}
       
       {/* AfroSwap Modal */}
-      {showAfroSwap && <AfroSwap afroxPrice={afroxPrice} onClose={() => setShowAfroSwap(false)} />}
+      {showAfroSwap && (
+        <AfroSwap 
+          afroxPrice={afroxPrice} 
+          onClose={() => setShowAfroSwap(false)} 
+          onNavigateToLPMining={() => {
+            setShowAfroSwap(false);
+            handleTabChange('lp-mining');
+          }}
+        />
+      )}
     </div>
   );
 }
