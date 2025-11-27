@@ -1,20 +1,35 @@
 // src/app/page.js
-// Root page that renders AfrodexStaking component
-// Handles all tab routing via query params (?tab=lp-mining, ?tab=governance, etc.)
+'use client';
 
+import { Suspense } from 'react';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import AfrodexStaking from '../components/AfrodexStaking';
 
-export const metadata = {
-  title: 'AfroX DeFi Hub | Stake, Mint, Mine, Swap, Earn & Govern',
-  description: 'AfroX DeFi Hub - Stake AfroX tokens, Mine LP rewards, Swap tokens, Earn governance rewards, and participate in Community of Trust governance.',
-  keywords: 'AfroX, DeFi, Staking, LP Mining, Swap, Governance, Blockchain, Crypto',
-  openGraph: {
-    title: 'AfroX DeFi Hub | Stake, Mint, Mine, Swap, Earn & Govern',
-    description: 'Your all-in-one DeFi platform for AfroX ecosystem',
-    type: 'website',
-  },
-};
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="text-orange-400 text-xl">Loading...</div>
+    </div>
+  );
+}
 
 export default function Home() {
-  return <AfrodexStaking />;
+  return (
+    <div className="min-h-screen bg-black">
+      {/* Connect Wallet Header */}
+      <div className="max-w-6xl mx-auto px-6 py-4">
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-gray-400">
+            Staking Powered by AfroDex Community of Trust & AfroDex Ambassadors
+          </div>
+          <ConnectButton />
+        </div>
+      </div>
+
+      {/* Main App */}
+      <Suspense fallback={<LoadingFallback />}>
+        <AfrodexStaking />
+      </Suspense>
+    </div>
+  );
 }
