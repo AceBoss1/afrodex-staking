@@ -1,6 +1,6 @@
 // src/app/guide/page.js
 // User Guide page at hub.afrox.one/guide
-import UserGuide from '@/components/UserGuide';
+import UserGuide from '@//components/UserGuide';
 
 export const metadata = {
   title: 'User Guide | AfroX DeFi Hub',
