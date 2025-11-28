@@ -20,7 +20,7 @@ export default function Home() {
       <div className="max-w-6xl mx-auto px-6 py-4">
         <div className="flex justify-between items-center">
           <div className="text-sm text-gray-400">
-            Staking Powered by AfroDex Community of Trust & AfroDex Ambassadors
+            DeFi Hub Powered by AfroDex Community of Trust & AfroDex Ambassadors
           </div>
           <ConnectButton />
         </div>
