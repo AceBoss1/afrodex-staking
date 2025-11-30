@@ -6,7 +6,7 @@
  */
 
 // Your AfroX token address
-const AFROX_TOKEN_ADDRESS = '0xYourAfroXTokenAddress'; // TODO: Update this
+const AFROX_TOKEN_ADDRESS = '0x08130635368aa28b217a4dfb68e1bf8dc525621c'; // TODO: Update this
 const WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
 
 /**
@@ -64,20 +64,49 @@ export async function getPriceFromUniswapPair(publicClient, pairAddress) {
 }
 
 /**
- * Method 2: Get ETH price from Chainlink or Coingecko
+ * Method 2: Get ETH price from Alchemy
  */
 export async function getETHPriceUSD() {
   try {
-    // Try Coingecko first (free, no API key needed)
-    const response = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd'
-    );
+    // Try Alchemy
+// prices-fetch-script.js
+
+// Replace with your Alchemy API key:
+const apiKey = "NEXT_PUBLIC_ALCHEMY_API_KEY";
+
+// Define the network and contract addresses you want to fetch prices for.
+const addresses = [
+  {
+    network: "eth-mainnet",
+    address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" // WETH
+  },
+  {
+    network: "eth-mainnet",
+    address: "0x08130635368aa28b217a4dfb68e1bf8dc525621c" // AfroX
+  }
+];
+
+async function getTokenPricesByAddress() {
+  try {
+    const response = await fetch('https://api.g.alchemy.com/prices/v1/tokens/by-address', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({ addresses })
+    });
+
     const data = await response.json();
-    return data.ethereum.usd;
+    console.log("Token Prices By Address:");
+    console.log(JSON.stringify(data, null, 2));
   } catch (error) {
-    console.error('Error fetching ETH price:', error);
-    // Fallback to a reasonable default
-    return 3000; // Approximate ETH price
+    console.error("Error:", error);
+  }
+}
+
+getTokenPricesByAddress();
+
   }
 }
 
