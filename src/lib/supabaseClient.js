@@ -1,4 +1,4 @@
-// src/lib/supabaseClient.js
+// src/lib/supabaseClient.js - COMPLETE VERSION WITH ALL EXPORTS
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -7,36 +7,130 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('⚠️ Missing Supabase credentials in .env.local');
-  console.error('Add NEXT_PUBLIC_SUPABASE_ANON_KEY to your environment variables');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-/**
- * Generate referral code from wallet address
- * Format: First 8 chars after 0x (cfbD73A1 not D73A1404)
- */
+// =============================================
+// GOVERNANCE FUNCTIONS
+// =============================================
+
+export async function getGovernanceProposals() {
+  try {
+    const { data, error } = await supabase
+      .from('governance_proposals')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error getting proposals:', error);
+    return [];
+  }
+}
+
+export async function submitVote(proposalId, walletAddress, support, voteAmount) {
+  try {
+    const { data, error } = await supabase
+      .from('governance_votes')
+      .insert({
+        proposal_id: proposalId,
+        wallet_address: walletAddress.toLowerCase(),
+        support,
+        vote_amount: voteAmount,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error submitting vote:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createProposal(proposalData) {
+  try {
+    const { data, error } = await supabase
+      .from('governance_proposals')
+      .insert({
+        title: proposalData.title,
+        description: proposalData.description,
+        category: proposalData.category,
+        proposer: proposalData.proposer.toLowerCase(),
+        voting_duration_days: proposalData.votingDurationDays,
+        status: 'active',
+        votes_for: 0,
+        votes_against: 0,
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data };
+  } catch (error) {
+    console.error('Error creating proposal:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// =============================================
+// LP MINING FUNCTIONS
+// =============================================
+
+export async function getLPMiningLeaderboard(limit = 100) {
+  try {
+    const { data, error } = await supabase
+      .from('lp_mining_leaderboard')
+      .select('*')
+      .order('total_lp_locked', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error getting LP mining leaderboard:', error);
+    return [];
+  }
+}
+
+export async function getLPMiningPositions(walletAddress) {
+  try {
+    const { data, error } = await supabase
+      .from('lp_mining_positions')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .order('locked_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error getting LP positions:', error);
+    return [];
+  }
+}
+
+// =============================================
+// AMBASSADOR FUNCTIONS
+// =============================================
+
 export function generateReferralCode(address) {
   if (!address) return '';
-  // Remove 0x and take first 8 characters
   return address.slice(2, 10);
 }
 
-/**
- * Create referral link
- */
 export function createReferralLink(code) {
   return `https://dashboard.afrox.one/?ref=${code}`;
 }
 
-/**
- * Register a new referral
- */
 export async function registerReferral(referrerAddress, refereeAddress) {
   try {
     const referrerCode = generateReferralCode(referrerAddress);
     
-    // Check if referral already exists
     const { data: existing } = await supabase
       .from('referrals')
       .select('id')
@@ -48,24 +142,19 @@ export async function registerReferral(referrerAddress, refereeAddress) {
       return { success: true, message: 'Referral already exists' };
     }
 
-    // Insert new referral
     const { data, error } = await supabase
       .from('referrals')
       .insert({
         referrer_address: referrerAddress.toLowerCase(),
         referee_address: refereeAddress.toLowerCase(),
         referral_code: referrerCode,
-        level: 1, // Direct referral (L1)
+        level: 1,
         created_at: new Date().toISOString()
       })
       .select()
       .single();
 
     if (error) throw error;
-
-    // Build referral tree (L2-L5)
-    await buildReferralTree(referrerAddress, refereeAddress);
-
     return { success: true, data };
   } catch (error) {
     console.error('Error registering referral:', error);
@@ -73,46 +162,10 @@ export async function registerReferral(referrerAddress, refereeAddress) {
   }
 }
 
-/**
- * Build multi-level referral tree (L2-L5)
- */
-async function buildReferralTree(referrerAddress, newRefereeAddress) {
-  try {
-    // Get referrer's upline (their referrer)
-    const { data: upline } = await supabase
-      .from('referrals')
-      .select('referrer_address, level')
-      .eq('referee_address', referrerAddress.toLowerCase())
-      .order('level', { ascending: true });
-
-    if (!upline || upline.length === 0) return;
-
-    // Add L2-L5 relationships
-    for (const ancestor of upline) {
-      const newLevel = ancestor.level + 1;
-      if (newLevel <= 5) {
-        await supabase.from('referrals').insert({
-          referrer_address: ancestor.referrer_address,
-          referee_address: newRefereeAddress.toLowerCase(),
-          referral_code: generateReferralCode(ancestor.referrer_address),
-          level: newLevel,
-          created_at: new Date().toISOString()
-        });
-      }
-    }
-  } catch (error) {
-    console.error('Error building referral tree:', error);
-  }
-}
-
-/**
- * Get ambassador stats
- */
 export async function getAmbassadorStats(address) {
   try {
     const lowerAddress = address.toLowerCase();
 
-    // Get all referrals by level
     const { data: referrals } = await supabase
       .from('referrals')
       .select('*')
@@ -131,7 +184,6 @@ export async function getAmbassadorStats(address) {
       };
     }
 
-    // Count by level
     const stats = {
       totalReferrals: referrals.length,
       l1: referrals.filter(r => r.level === 1).length,
@@ -141,7 +193,6 @@ export async function getAmbassadorStats(address) {
       l5: referrals.filter(r => r.level === 5).length
     };
 
-    // Get commissions
     const { data: commissions } = await supabase
       .from('commissions')
       .select('*')
@@ -167,9 +218,6 @@ export async function getAmbassadorStats(address) {
   }
 }
 
-/**
- * Get referral tree (network visualization)
- */
 export async function getReferralTree(address, maxDepth = 5) {
   try {
     const { data: tree } = await supabase
@@ -186,90 +234,6 @@ export async function getReferralTree(address, maxDepth = 5) {
   }
 }
 
-/**
- * Record commission event
- */
-export async function recordCommission(
-  ambassadorAddress,
-  refereeAddress,
-  amount,
-  level,
-  eventType = 'first_claim'
-) {
-  try {
-    const { data, error } = await supabase
-      .from('commissions')
-      .insert({
-        ambassador_address: ambassadorAddress.toLowerCase(),
-        referee_address: refereeAddress.toLowerCase(),
-        amount: amount.toString(),
-        level,
-        event_type: eventType,
-        claimed: false,
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Also log to referral_events
-    await supabase.from('referral_events').insert({
-      referrer_address: ambassadorAddress.toLowerCase(),
-      referee_address: refereeAddress.toLowerCase(),
-      event_type: eventType,
-      amount: amount.toString(),
-      level,
-      created_at: new Date().toISOString()
-    });
-
-    return { success: true, data };
-  } catch (error) {
-    console.error('Error recording commission:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Claim commissions
- */
-export async function claimCommissions(ambassadorAddress) {
-  try {
-    // Get unclaimed commissions
-    const { data: unclaimed } = await supabase
-      .from('commissions')
-      .select('*')
-      .eq('ambassador_address', ambassadorAddress.toLowerCase())
-      .eq('claimed', false);
-
-    if (!unclaimed || unclaimed.length === 0) {
-      return { success: false, error: 'No commissions to claim' };
-    }
-
-    const totalAmount = unclaimed.reduce((sum, c) => sum + parseFloat(c.amount), 0);
-
-    // Mark as claimed
-    const { error } = await supabase
-      .from('commissions')
-      .update({ 
-        claimed: true,
-        claimed_at: new Date().toISOString()
-      })
-      .eq('ambassador_address', ambassadorAddress.toLowerCase())
-      .eq('claimed', false);
-
-    if (error) throw error;
-
-    return { success: true, amount: totalAmount };
-  } catch (error) {
-    console.error('Error claiming commissions:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Get leaderboard
- */
 export async function getAmbassadorLeaderboard(limit = 100) {
   try {
     const { data, error } = await supabase
@@ -279,44 +243,9 @@ export async function getAmbassadorLeaderboard(limit = 100) {
       .limit(limit);
 
     if (error) throw error;
-
     return data || [];
   } catch (error) {
     console.error('Error getting leaderboard:', error);
     return [];
   }
 }
-
-/**
- * Update leaderboard (call this periodically or on commission events)
- */
-export async function updateLeaderboard(ambassadorAddress) {
-  try {
-    const stats = await getAmbassadorStats(ambassadorAddress);
-    if (!stats) return;
-
-    const { error } = await supabase
-      .from('ambassador_leaderboard')
-      .upsert({
-        ambassador_address: ambassadorAddress.toLowerCase(),
-        total_referrals: stats.totalReferrals,
-        total_earned: stats.totalEarned,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'ambassador_address'
-      });
-
-    if (error) throw error;
-  } catch (error) {
-    console.error('Error updating leaderboard:', error);
-  }
-}
-
-/**
- * Example usage in components:
- * 
- * import { supabase, getAmbassadorStats, registerReferral } from '@/lib/supabaseClient';
- * 
- * const stats = await getAmbassadorStats(userAddress);
- * const result = await registerReferral(referrerAddress, newUserAddress);
- */
