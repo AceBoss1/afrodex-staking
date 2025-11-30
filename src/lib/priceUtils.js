@@ -315,10 +315,11 @@ export function useAfroxPrice(publicClient, pairAddress) {
  * 
  * // Fetch price with fallbacks
  * const priceData = await getAfroxPriceUSD(publicClient, PAIR_ADDRESS);
- * console.log(`AfroX Price: ${formatUSD(priceData.priceUSD)}`);
- * console.log(`Source: ${priceData.source}`);
- * console.log(`24h Change: ${priceData.priceChange24h}%`);
+ * console.log('AfroX Price:', formatUSD(priceData.priceUSD));
+ * console.log('Source:', priceData.source);
+ * console.log('24h Change:', priceData.priceChange24h + '%');
  * 
  * // Calculate USD value
  * const usdValue = calculateUSDValue(stakedBalance, priceData.priceUSD);
- * console.log(`Staked Value: ${formatUSD(usdValue)}`);
+ * console.log('Staked Value:', formatUSD(usdValue));
+ */
