@@ -352,8 +352,8 @@ content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH for Afr
                     <a href="https://discord.gg/5EwRguT" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-orange-400">
                       <span>💬</span> Discord: <span className="text-orange-400">discord.gg/5EwRguT</span>
                     </a>
-                    <a href="https://twitter.com/AfroDex1" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-orange-400">
-                      <span>🐦</span> Twitter: <span className="text-orange-400">@AfroDex1</span>
+                    <a href="https://coinmarketcap.com/community/profile/AfroX" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-orange-400">
+                      <span>Ⓜ️</span> CoinMarketCap: <span className="text-orange-400">@AfroX</span>
                     </a>
                   </div>
                 </div>
