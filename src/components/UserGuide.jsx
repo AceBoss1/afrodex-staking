@@ -107,7 +107,7 @@ export default function UserGuide() {
                 },
                 {
                   title: 'Get AfroX Tokens',
-                  content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH or other tokens for AfroX. You can also purchase from supported exchanges.'
+content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH for AfroX. You can also purchase from supported exchanges.'
                 },
                 {
                   title: 'Start Using the Platform',
