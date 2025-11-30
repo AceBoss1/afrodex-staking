@@ -272,41 +272,8 @@ export function formatUSD(value, decimals = 2) {
   }
 }
 
-/**
- * React Hook for price data with auto-refresh
- */
-export function useAfroxPrice(publicClient, pairAddress) {
-  if (typeof React === 'undefined') {
-    console.warn('React not available for useAfroxPrice hook');
-    return { priceData: null, loading: true };
-  }
-
-  const [priceData, setPriceData] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    let mounted = true;
-
-    async function fetchPrice() {
-      setLoading(true);
-      const data = await getAfroxPriceUSD(publicClient, pairAddress);
-      if (mounted) {
-        setPriceData(data);
-        setLoading(false);
-      }
-    }
-
-    fetchPrice();
-    const interval = setInterval(fetchPrice, 30000); // Refresh every 30 seconds
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [publicClient, pairAddress]);
-
-  return { priceData, loading };
-}
+// Note: If you need a React Hook for price data, create it in a separate component file
+// This utility file should remain framework-agnostic
 
 /**
  * Example usage in components:
