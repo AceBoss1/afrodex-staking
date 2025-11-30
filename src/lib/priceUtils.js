@@ -110,60 +110,6 @@ getTokenPricesByAddress();
   }
 }
 
-/**
- * Method 3: Get price from Dexscreener (shows same data as wallets)
- */
-export async function getPriceFromDexscreener(tokenAddress) {
-  try {
-    const response = await fetch(
-      `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`
-    );
-    const data = await response.json();
-    
-    if (data.pairs && data.pairs.length > 0) {
-      // Get the pair with highest liquidity
-      const mainPair = data.pairs.sort((a, b) => 
-        parseFloat(b.liquidity.usd) - parseFloat(a.liquidity.usd)
-      )[0];
-      
-      return {
-        priceUSD: parseFloat(mainPair.priceUsd),
-        priceChange24h: parseFloat(mainPair.priceChange.h24),
-        volume24h: parseFloat(mainPair.volume.h24),
-        liquidity: parseFloat(mainPair.liquidity.usd),
-        pairAddress: mainPair.pairAddress
-      };
-    }
-    return null;
-  } catch (error) {
-    console.error('Error fetching from Dexscreener:', error);
-    return null;
-  }
-}
-
-/**
- * Method 4: Get price from CoinGecko (if token is listed)
- */
-export async function getPriceFromCoingecko(tokenAddress) {
-  try {
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${tokenAddress}&vs_currencies=usd&include_24hr_change=true`
-    );
-    const data = await response.json();
-    const tokenData = data[tokenAddress.toLowerCase()];
-    
-    if (tokenData) {
-      return {
-        priceUSD: tokenData.usd,
-        priceChange24h: tokenData.usd_24h_change
-      };
-    }
-    return null;
-  } catch (error) {
-    console.error('Error fetching from CoinGecko:', error);
-    return null;
-  }
-}
 
 /**
  * Main function: Get AfroX price with fallbacks
@@ -171,13 +117,8 @@ export async function getPriceFromCoingecko(tokenAddress) {
 export async function getAfroxPriceUSD(publicClient, pairAddress) {
   // Try multiple sources in order of reliability
   
-  // 1. Try Dexscreener first (fastest, same as wallets show)
-  const dexscreenerPrice = await getPriceFromDexscreener(AFROX_TOKEN_ADDRESS);
-  if (dexscreenerPrice) {
-    return dexscreenerPrice;
-  }
 
-  // 2. Try calculating from Uniswap reserves
+  // 1. Try calculating from Uniswap reserves
   if (publicClient && pairAddress) {
     const uniswapPrice = await getPriceFromUniswapPair(publicClient, pairAddress);
     if (uniswapPrice) {
