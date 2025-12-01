@@ -252,26 +252,26 @@ export async function getETHPriceUSD() {
 // }
 
 // OPTION 2: Alchemy (requires API key)
- export async function getAfroxPriceUSD(publicClient, pairAddress) {
-   const price = await getPriceFromAlchemy(AFROX_TOKEN_ADDRESS);
-   if (price?.priceUSD) {
-     console.log('✅ Using Alchemy:', price.priceUSD);
-     return price;
-   }
-   console.warn('❌ Alchemy failed');
-   return null;
- }
+//  export async function getAfroxPriceUSD(publicClient, pairAddress) {
+//    const price = await getPriceFromAlchemy(AFROX_TOKEN_ADDRESS);
+//    if (price?.priceUSD) {
+//      console.log('✅ Using Alchemy:', price.priceUSD);
+//      return price;
+//    }
+//    console.warn('❌ Alchemy failed');
+//    return null;
+//  }
 
 // OPTION 3: CoinMarketCap DEX
-// export async function getAfroxPriceUSD(publicClient, pairAddress) {
-//   const price = await getPriceFromCMCDex();
-//   if (price?.priceUSD) {
-//     console.log('✅ Using CMC DEX:', price.priceUSD);
-//     return price;
-//   }
-//   console.warn('❌ CMC DEX failed');
-//   return null;
-// }
+ export async function getAfroxPriceUSD(publicClient, pairAddress) {
+   const price = await getPriceFromCMCDex();
+   if (price?.priceUSD) {
+     console.log('✅ Using CMC DEX:', price.priceUSD);
+     return price;
+   }
+   console.warn('❌ CMC DEX failed');
+   return null;
+ }
 
 // OPTION 4: GeckoTerminal
 // export async function getAfroxPriceUSD(publicClient, pairAddress) {
