@@ -263,26 +263,26 @@ export async function getETHPriceUSD() {
 //  }
 
 // OPTION 3: CoinMarketCap DEX
- export async function getAfroxPriceUSD(publicClient, pairAddress) {
-   const price = await getPriceFromCMCDex();
-   if (price?.priceUSD) {
-     console.log('✅ Using CMC DEX:', price.priceUSD);
-     return price;
-   }
-   console.warn('❌ CMC DEX failed');
-   return null;
- }
-
-// OPTION 4: GeckoTerminal
 // export async function getAfroxPriceUSD(publicClient, pairAddress) {
-//   const price = await getPriceFromGeckoTerminal();
+//   const price = await getPriceFromCMCDex();
 //   if (price?.priceUSD) {
-//     console.log('✅ Using GeckoTerminal:', price.priceUSD);
+//     console.log('✅ Using CMC DEX:', price.priceUSD);
 //     return price;
 //   }
-//   console.warn('❌ GeckoTerminal failed');
+//   console.warn('❌ CMC DEX failed');
 //   return null;
 // }
+
+// OPTION 4: GeckoTerminal
+ export async function getAfroxPriceUSD(publicClient, pairAddress) {
+   const price = await getPriceFromGeckoTerminal();
+   if (price?.priceUSD) {
+     console.log('✅ Using GeckoTerminal:', price.priceUSD);
+     return price;
+   }
+   console.warn('❌ GeckoTerminal failed');
+   return null;
+ }
 
 // OPTION 5: Dexscreener
 // export async function getAfroxPriceUSD(publicClient, pairAddress) {
