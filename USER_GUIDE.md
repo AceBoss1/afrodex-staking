@@ -393,7 +393,7 @@ A: Your commission for that referral is forfeited.
 
 - **Telegram:** https://t.me/AfroDex
 - **Discord:** https://discord.gg/5EwRguT
-- **Twitter/X:** https://twitter.com/AfroDex1
+- **CoinMarketCap:** https://coinmarketcap.com/community/profile/AfroX (@AfroX)
 
 ### 🌐 Platform Links
 
