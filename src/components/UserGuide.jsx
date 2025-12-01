@@ -107,7 +107,7 @@ export default function UserGuide() {
                 },
                 {
                   title: 'Get AfroX Tokens',
-content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH for AfroX. You can also purchase from supported exchanges.'
+                  content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH or other tokens for AfroX. You can also purchase from supported exchanges.'
                 },
                 {
                   title: 'Start Using the Platform',
@@ -199,8 +199,53 @@ content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH for Afr
                 </table>
               </div>
 
+              <h3 className="text-lg font-semibold text-white mb-3">How to Lock LP Tokens</h3>
+              <StepGuide steps={[
+                { title: 'Get LP Tokens', content: 'First, add liquidity in AfroSwap (AfroX + ETH pair) to receive LP tokens' },
+                { title: 'Select Duration', content: 'Choose your preferred lock duration (longer = higher APY)' },
+                { title: 'Enter Amount', content: 'Enter the amount of LP tokens you want to lock' },
+                { title: 'Lock & Mine', content: 'Click "Lock & Mine" and confirm the transaction in your wallet' },
+              ]} />
+
+              <h3 className="text-lg font-semibold text-white mb-3 mt-6">My Positions Tab</h3>
+              <p className="text-gray-300 mb-4">
+                The "My Positions" tab shows all your locked LP positions with detailed information:
+              </p>
+              <div className="overflow-x-auto mb-6">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-800">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Column</th>
+                      <th className="px-4 py-2 text-left">Description</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    <tr><td className="px-4 py-2 text-orange-400">LP Amount</td><td className="px-4 py-2 text-gray-300">Amount of LP tokens locked</td></tr>
+                    <tr><td className="px-4 py-2 text-orange-400">Lock Duration</td><td className="px-4 py-2 text-gray-300">Your selected lock period</td></tr>
+                    <tr><td className="px-4 py-2 text-orange-400">Time Remaining</td><td className="px-4 py-2 text-gray-300">Days/hours until unlock available</td></tr>
+                    <tr><td className="px-4 py-2 text-orange-400">Mining Rewards</td><td className="px-4 py-2 text-gray-300">Accumulated rewards from APY</td></tr>
+                    <tr><td className="px-4 py-2 text-orange-400">Instant Bonus</td><td className="px-4 py-2 text-gray-300">5% bonus credited immediately</td></tr>
+                    <tr><td className="px-4 py-2 text-orange-400">Status</td><td className="px-4 py-2 text-gray-300">Locked / Ready to Unlock / Unlocked</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <InfoBox title="🔄 Refresh Button" type="info">
+                <p className="mb-2">Use the <strong>Refresh button</strong> to:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Update your positions with the latest data from the blockchain</li>
+                  <li>See updated reward calculations</li>
+                  <li>Check if your lock period has ended</li>
+                </ul>
+                <p className="mt-2 text-sm text-gray-400">Click the refresh icon (🔄) next to "My Positions" to manually refresh your data.</p>
+              </InfoBox>
+
               <InfoBox title="Early Unlock Penalty" type="error">
                 If you unlock before your lock period ends, you lose <strong>50%</strong> of your remaining rewards. Instant bonus is not affected.
+              </InfoBox>
+
+              <InfoBox title="💡 Pro Tip" type="info">
+                After adding liquidity in AfroSwap, lock your LP tokens here to earn <strong>both</strong> trading fees from the liquidity pool AND mining rewards from LP Lock-Mining!
               </InfoBox>
             </Section>
 
@@ -222,6 +267,61 @@ content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH for Afr
                 { title: 'Enter Amount', content: 'Type the amount you want to swap' },
                 { title: 'Review & Confirm', content: 'Check the rate and slippage, then click "Swap"' },
               ]} />
+
+              <h3 className="text-lg font-semibold text-white mb-3 mt-6">📊 Limit Orders</h3>
+              <p className="text-gray-300 mb-4">
+                Limit orders allow you to set a target price and have your trade executed automatically when the market reaches that price.
+              </p>
+              <StepGuide steps={[
+                { title: 'Select Limit Tab', content: 'Click on the "Limit" tab in AfroSwap' },
+                { title: 'Choose Order Type', content: 'Select "Buy" to purchase AfroX at a lower price, or "Sell" to sell at a higher price' },
+                { title: 'Set Target Price', content: 'Enter your desired price per token (e.g., buy AfroX when price drops to 0.0000001 ETH)' },
+                { title: 'Enter Amount', content: 'Specify how many tokens you want to buy or sell' },
+                { title: 'Set Expiry', content: 'Choose when the order expires: 1 hour, 24 hours, 7 days, or 30 days' },
+                { title: 'Place Order', content: 'Click "Place Order" and confirm in your wallet' },
+              ]} />
+
+              <InfoBox title="How Limit Orders Work" type="info">
+                <ul className="list-disc list-inside space-y-2">
+                  <li>Your order is stored and monitored by our price oracle service</li>
+                  <li>When the market price reaches your target, the order executes automatically</li>
+                  <li>You can view and cancel pending orders in the "My Orders" section</li>
+                  <li>Orders expire if not filled within the selected timeframe</li>
+                </ul>
+              </InfoBox>
+
+              <h3 className="text-lg font-semibold text-white mb-3 mt-6">💧 Liquidity</h3>
+              <p className="text-gray-300 mb-4">
+                Provide liquidity to earn trading fees from every swap in the pool. You'll receive LP (Liquidity Provider) tokens representing your share.
+              </p>
+
+              <h4 className="text-md font-semibold text-orange-400 mb-3">Adding Liquidity</h4>
+              <StepGuide steps={[
+                { title: 'Select Pool Tab', content: 'Click on the "Pool" tab in AfroSwap' },
+                { title: 'Choose Token Pair', content: 'Select AfroX and ETH (or another supported pair)' },
+                { title: 'Enter Amounts', content: 'Enter the amount for one token - the other amount calculates automatically based on current pool ratio' },
+                { title: 'Review Pool Share', content: 'Check the percentage of the pool you will own' },
+                { title: 'Add Liquidity', content: 'Click "Add Liquidity" and approve both tokens if prompted, then confirm the transaction' },
+              ]} />
+
+              <h4 className="text-md font-semibold text-orange-400 mb-3 mt-4">Removing Liquidity</h4>
+              <StepGuide steps={[
+                { title: 'View Your Position', content: 'Your LP token balance is shown in the Pool tab' },
+                { title: 'Select Remove', content: 'Click "Remove Liquidity"' },
+                { title: 'Choose Amount', content: 'Select percentage (25%, 50%, 75%, 100%) or enter custom amount' },
+                { title: 'Confirm Removal', content: 'Review the tokens you will receive and confirm the transaction' },
+              ]} />
+
+              <InfoBox title="💡 Maximize Your Earnings" type="info">
+                <p className="mb-2"><strong>Don't just hold your LP tokens!</strong></p>
+                <p>After adding liquidity, go to the <strong>LP Token Lock-Mining Dashboard</strong> and lock your LP tokens to earn:</p>
+                <ul className="list-disc list-inside space-y-1 mt-2">
+                  <li>Trading fees from the liquidity pool (passive)</li>
+                  <li><strong>PLUS</strong> Mining rewards up to 155% APY</li>
+                  <li><strong>PLUS</strong> 5% instant bonus on lock</li>
+                </ul>
+                <p className="mt-2 text-sm text-gray-400">This is the best way to maximize returns on your AfroX investment!</p>
+              </InfoBox>
             </Section>
 
             {/* Ambassador */}
@@ -283,6 +383,73 @@ content: 'If you don\'t have AfroX tokens, click "AfroSwap" and swap ETH for Afr
                     <tr><td className="px-4 py-2">Captain</td><td className="px-4 py-2 text-green-400">2x</td><td className="px-4 py-2 text-red-400">No</td></tr>
                     <tr><td className="px-4 py-2">Commander</td><td className="px-4 py-2 text-green-400">3x</td><td className="px-4 py-2 text-red-400">No</td></tr>
                     <tr><td className="px-4 py-2">General+</td><td className="px-4 py-2 text-green-400">4-5x</td><td className="px-4 py-2 text-green-400">Yes</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <h3 className="text-lg font-semibold text-white mb-3">How to Vote on Proposals</h3>
+              <StepGuide steps={[
+                { title: 'Navigate to Governance', content: 'Click on "Community of Trust Dashboard" tab' },
+                { title: 'Browse Active Proposals', content: 'View all currently active proposals in the "Active Proposals" tab' },
+                { title: 'Read the Proposal', content: 'Click on a proposal to read its full description and details' },
+                { title: 'Cast Your Vote', content: 'Click "Vote For" or "Vote Against" and confirm in your wallet' },
+              ]} />
+
+              <InfoBox title="Voting Requirements" type="info">
+                <ul className="list-disc list-inside space-y-2">
+                  <li>You must have AfroX staked to vote (minimum Cadet tier)</li>
+                  <li>Your voting power = Staked Balance × Tier Multiplier</li>
+                  <li>You can only vote once per proposal</li>
+                  <li>Votes cannot be changed after submission</li>
+                </ul>
+              </InfoBox>
+
+              <h3 className="text-lg font-semibold text-white mb-3 mt-6">✏️ Creating a Proposal</h3>
+              <p className="text-gray-300 mb-4">
+                Only members with <strong>General tier or higher</strong> (≥100B AfroX staked) can create proposals.
+              </p>
+              <StepGuide steps={[
+                { title: 'Go to Create Proposal', content: 'Click the "Create Proposal" tab in the Governance dashboard' },
+                { title: 'Enter Title', content: 'Write a clear, descriptive title for your proposal' },
+                { title: 'Select Category', content: 'Choose from: Rewards, Governance, Tokenomics, Partnerships, Development, Community, or Other' },
+                { title: 'Write Description', content: 'Provide detailed information about your proposal, including rationale and expected outcomes' },
+                { title: 'Set Voting Duration', content: 'Choose how long voting will be open: 3, 5, 7, or 14 days' },
+                { title: 'Submit Proposal', content: 'Click "Submit Proposal" and confirm the transaction' },
+              ]} />
+
+              <InfoBox title="Tips for a Good Proposal" type="info">
+                <ul className="list-disc list-inside space-y-2">
+                  <li>Be specific about what you're proposing</li>
+                  <li>Explain the benefits to the AfroX ecosystem</li>
+                  <li>Include implementation details if applicable</li>
+                  <li>Consider potential risks or downsides</li>
+                  <li>Use formatting (bullet points, headers) for readability</li>
+                </ul>
+              </InfoBox>
+
+              <h3 className="text-lg font-semibold text-white mb-3 mt-6">📚 Proposal History</h3>
+              <p className="text-gray-300 mb-4">
+                View all past proposals and their outcomes in the History tab.
+              </p>
+              <StepGuide steps={[
+                { title: 'Click History Tab', content: 'Navigate to the "History" tab in the Governance dashboard' },
+                { title: 'Browse Past Proposals', content: 'See all completed proposals with their final status (Passed ✓ or Rejected ✗)' },
+                { title: 'View Details', content: 'Click on any proposal to see full voting breakdown, including For/Against votes and quorum status' },
+              ]} />
+
+              <div className="overflow-x-auto mt-4">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-800">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left">Meaning</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800">
+                    <tr><td className="px-4 py-2 text-green-400">✓ Passed</td><td className="px-4 py-2 text-gray-300">Proposal received majority "For" votes and met quorum</td></tr>
+                    <tr><td className="px-4 py-2 text-red-400">✗ Rejected</td><td className="px-4 py-2 text-gray-300">Proposal received majority "Against" votes or didn't meet quorum</td></tr>
+                    <tr><td className="px-4 py-2 text-blue-400">⏳ Active</td><td className="px-4 py-2 text-gray-300">Voting is still in progress</td></tr>
+                    <tr><td className="px-4 py-2 text-purple-400">🔄 Executed</td><td className="px-4 py-2 text-gray-300">Passed proposal has been implemented</td></tr>
                   </tbody>
                 </table>
               </div>
