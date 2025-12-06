@@ -380,8 +380,7 @@ export async function calculateAndRecordCommissions(stakerAddress, stakeAmount, 
         referee_address: lowerStaker,
         commission_type: 'staking',
         level: ref.level,
-        stake_amount: stakeAmount,
-        commission_amount: commissionAmount,
+        amount: commissionAmount,
         rate_applied: rate,
         is_eligible: true,
         is_claimable: false,
@@ -491,15 +490,15 @@ export async function updateAmbassadorStats(walletAddress) {
     // Get commissions
     const { data: commissions } = await supabase
       .from('commissions')
-      .select('commission_amount, claimed')
+      .select('amount, claimed')
       .eq('ambassador_address', lowerWallet);
     
     let totalEarned = 0, totalClaimed = 0, pending = 0;
     if (commissions) {
       for (const c of commissions) {
-        totalEarned += parseFloat(c.commission_amount || 0);
-        if (c.claimed) totalClaimed += parseFloat(c.commission_amount || 0);
-        else pending += parseFloat(c.commission_amount || 0);
+        totalEarned += parseFloat(c.amount || 0);
+        if (c.claimed) totalClaimed += parseFloat(c.amount || 0);
+        else pending += parseFloat(c.amount || 0);
       }
     }
     
@@ -546,14 +545,14 @@ async function updateAmbassadorCommissions(walletAddress) {
     const lowerWallet = walletAddress.toLowerCase();
     const { data: commissions } = await supabase
       .from('commissions')
-      .select('commission_amount, claimed')
+      .select('amount, claimed')
       .eq('ambassador_address', lowerWallet);
     
     let totalEarned = 0, pending = 0;
     if (commissions) {
       for (const c of commissions) {
-        totalEarned += parseFloat(c.commission_amount || 0);
-        if (!c.claimed) pending += parseFloat(c.commission_amount || 0);
+        totalEarned += parseFloat(c.amount || 0);
+        if (!c.claimed) pending += parseFloat(c.amount || 0);
       }
     }
     
@@ -642,8 +641,7 @@ export async function recordLPMiningPosition(params) {
         referee_address: walletAddress.toLowerCase(),
         commission_type: 'lp_mining',
         level: 1,  // L1 only for LP mining
-        stake_amount: afroxValue,
-        commission_amount: referrerBonus,  // 5% of AfroX value
+        amount: referrerBonus,  // 5% of AfroX value
         rate_applied: lpCommissionRate,
         is_eligible: true,
         is_claimable: true,  // LP mining commissions are immediately claimable
