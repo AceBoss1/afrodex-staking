@@ -1,6 +1,14 @@
 // src/components/AfrodexStaking.jsx - WITH SUPABASE INTEGRATION
 // Based on your existing component structure
 // ADDED: Supabase calls for recording staking events, referrals, and commissions
+//
+// ⚠️ SECURITY NOTE (CVE-2025-66478): 
+// If you're using Next.js 15.x or 16.x with App Router, update to a patched version:
+// - Next.js 15.0.5, 15.1.9, 15.2.6, 15.3.6, 15.4.8, 15.5.7, or 16.0.7
+// Run: npm install next@15.5.7 (or your preferred patched version)
+// Next.js 13.x and 14.x stable are NOT affected.
+// See: https://nextjs.org/blog/CVE-2025-66478
+//
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
