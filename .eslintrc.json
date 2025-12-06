@@ -1,13 +1,12 @@
 {
   "extends": ["next/core-web-vitals"],
-  "settings": {
-    "next": {
-      "rootDir": ["src/"]
-    }
-  },
   "rules": {
-    "@next/next/no-img-element": "off",
     "react/no-unescaped-entities": "off",
-    "react-hooks/rules-of-hooks": "off"
+    "@next/next/no-img-element": "off",
+    "react-hooks/exhaustive-deps": "warn"
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
   }
 }
