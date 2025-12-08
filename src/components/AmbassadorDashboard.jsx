@@ -1,11 +1,12 @@
 // src/components/AmbassadorDashboard.jsx
 // UPDATED: Dynamic referral links based on current domain
+// FIXED: Proper Supabase data mapping for stats, referral tree, and leaderboard
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
-import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree } from '../lib/supabaseClient';
+import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree, getClaimableCommissions } from '../lib/supabaseClient';
 import { formatUSD, calculateUSDValue } from '../lib/priceUtils';
 import { BADGE_TIERS, createDynamicReferralLink } from './AfrodexStaking';
 
@@ -29,6 +30,7 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
   const [stats, setStats] = useState({ totalReferrals: 0, l1: 0, l2: 0, l3: 0, l4: 0, l5: 0, totalEarned: 0, totalClaimed: 0, pendingCommissions: 0 });
   const [referralTree, setReferralTree] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [claimableAmount, setClaimableAmount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTreeView, setActiveTreeView] = useState('tree');
@@ -44,14 +46,64 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
       setReferralCode(code);
       setReferralLink(createDynamicReferralLink(code));
       
+      // =============================================
+      // FIX: Fetch ambassador stats and map snake_case to camelCase
+      // =============================================
       const ambassadorStats = await getAmbassadorStats(address);
-      if (ambassadorStats) setStats(prev => ({ ...prev, ...ambassadorStats }));
+      if (ambassadorStats) {
+        setStats({
+          totalReferrals: ambassadorStats.total_referrals || 0,
+          l1: ambassadorStats.level_1_count || 0,
+          l2: ambassadorStats.level_2_count || 0,
+          l3: ambassadorStats.level_3_count || 0,
+          l4: ambassadorStats.level_4_count || 0,
+          l5: ambassadorStats.level_5_count || 0,
+          totalEarned: parseFloat(ambassadorStats.total_earned) || 0,
+          totalClaimed: parseFloat(ambassadorStats.total_claimed) || 0,
+          pendingCommissions: parseFloat(ambassadorStats.pending_commissions) || 0
+        });
+      }
       
+      // =============================================
+      // FIX: Fetch leaderboard with proper field mapping
+      // =============================================
       const leaderboardData = await getAmbassadorLeaderboard(100);
-      setLeaderboard(leaderboardData || []);
+      if (leaderboardData && leaderboardData.length > 0) {
+        setLeaderboard(leaderboardData.map(item => ({
+          wallet: item.wallet || item.ambassador_address || item.wallet_address,
+          totalCommissions: parseFloat(item.total_earned) || 0,
+          totalReferrals: item.total_referrals || item.l1_count || 0
+        })));
+      } else {
+        setLeaderboard([]);
+      }
       
+      // =============================================
+      // FIX: Fetch referral tree with proper field mapping
+      // =============================================
       const treeData = await getReferralTree(address, 5);
-      setReferralTree(treeData || []);
+      if (treeData && treeData.length > 0) {
+        setReferralTree(treeData.map(ref => ({
+          referee_address: ref.referee_address,
+          level: ref.level,
+          created_at: ref.created_at,
+          is_active: ref.is_active
+        })));
+      } else {
+        setReferralTree([]);
+      }
+
+      // =============================================
+      // FIX: Fetch claimable commissions
+      // =============================================
+      const claimable = await getClaimableCommissions(address);
+      if (claimable && claimable.length > 0) {
+        const totalClaimable = claimable.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
+        setClaimableAmount(totalClaimable);
+      } else {
+        setClaimableAmount(0);
+      }
+
     } catch (e) {
       console.error('Error loading ambassador data:', e);
     } finally {
@@ -88,7 +140,8 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
   }
 
   const cardGlow = { boxShadow: '0 0 18px rgba(255,140,0,0.12)' };
-  const availableToClaim = Math.max(0, stats.totalEarned - stats.totalClaimed);
+  // Use the fetched claimable amount instead of calculating from stats
+  const availableToClaim = claimableAmount > 0 ? claimableAmount : Math.max(0, stats.totalEarned - stats.totalClaimed);
 
   if (!isConnected) {
     return (
@@ -301,11 +354,11 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
                   <div className={`text-lg font-bold ${index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
                     #{index + 1}
                   </div>
-                  <span className="text-sm">{shortAddr(item.wallet || item.ambassador_address)}</span>
+                  <span className="text-sm">{shortAddr(item.wallet)}</span>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-bold text-green-400">{prettyNumber(item.totalCommissions || item.total_earned)} AfroX</div>
-                  <div className="text-xs text-gray-400">{item.totalReferrals || item.total_referrals || 0} referrals</div>
+                  <div className="text-sm font-bold text-green-400">{prettyNumber(item.totalCommissions)} AfroX</div>
+                  <div className="text-xs text-gray-400">{item.totalReferrals || 0} referrals</div>
                 </div>
               </div>
             ))}
