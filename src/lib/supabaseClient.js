@@ -764,6 +764,80 @@ export async function getAllCommissions(walletAddress) {
 }
 
 /**
+ * Get commission history with status categorization
+ * Returns: { pending: [], matured: [], claimed: [] }
+ */
+export async function getCommissionHistory(walletAddress) {
+  if (!supabase || !walletAddress) return { pending: [], matured: [], claimed: [] };
+  
+  const lowerAddress = walletAddress.toLowerCase();
+  const now = new Date();
+  
+  try {
+    const { data, error } = await supabase
+      .from('commissions')
+      .select('*')
+      .eq('ambassador_address', lowerAddress)
+      .eq('is_eligible', true)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error getting commission history:', error);
+      return { pending: [], matured: [], claimed: [] };
+    }
+    
+    if (!data || data.length === 0) {
+      return { pending: [], matured: [], claimed: [] };
+    }
+    
+    const pending = [];
+    const matured = [];
+    const claimed = [];
+    
+    for (const commission of data) {
+      const claimableDate = new Date(commission.claimable_at);
+      const createdDate = new Date(commission.created_at);
+      
+      if (commission.is_claimed) {
+        // Already claimed
+        const claimedDate = new Date(commission.claimed_at || commission.updated_at);
+        const daysSinceClaimed = Math.floor((now - claimedDate) / (1000 * 60 * 60 * 24));
+        claimed.push({
+          ...commission,
+          status: 'claimed',
+          daysSinceClaimed,
+          displayText: daysSinceClaimed === 0 ? 'Today' : daysSinceClaimed === 1 ? '1 day ago' : `${daysSinceClaimed} days ago`
+        });
+      } else if (claimableDate <= now) {
+        // Matured - ready to claim
+        const daysSinceMatured = Math.floor((now - claimableDate) / (1000 * 60 * 60 * 24));
+        matured.push({
+          ...commission,
+          status: 'matured',
+          daysSinceMatured,
+          displayText: daysSinceMatured === 0 ? 'Today' : daysSinceMatured === 1 ? '1 day ago' : `${daysSinceMatured} days ago`
+        });
+      } else {
+        // Still pending
+        const daysUntilClaim = Math.ceil((claimableDate - now) / (1000 * 60 * 60 * 24));
+        pending.push({
+          ...commission,
+          status: 'pending',
+          daysUntilClaim,
+          displayText: daysUntilClaim === 1 ? '1 day' : `${daysUntilClaim} days`
+        });
+      }
+    }
+    
+    return { pending, matured, claimed };
+    
+  } catch (error) {
+    console.error('Error in getCommissionHistory:', error);
+    return { pending: [], matured: [], claimed: [] };
+  }
+}
+
+/**
  * Claim commissions (mark as claimed)
  */
 export async function claimCommissions(walletAddress, commissionIds, txHash) {
