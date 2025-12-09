@@ -640,57 +640,62 @@ export async function getNextCommissionInfo(walletAddress) {
   const lowerAddress = walletAddress.toLowerCase();
   
   try {
-    // Get the earliest pending commission that's not yet claimable
     const now = new Date().toISOString();
     
-    const { data: nextCommission, error } = await supabase
+    // First check if there are any commissions ready to claim NOW
+    const { data: claimableNow } = await supabase
+      .from('commissions')
+      .select('amount')
+      .eq('ambassador_address', lowerAddress)
+      .eq('is_claimed', false)
+      .eq('is_eligible', true)
+      .lte('claimable_at', now);
+    
+    if (claimableNow && claimableNow.length > 0) {
+      const totalClaimable = claimableNow.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      return {
+        hasClaimable: true,
+        claimableAmount: totalClaimable,
+        nextClaimDate: null,
+        nextClaimAmount: 0,
+        daysUntilClaim: 0
+      };
+    }
+    
+    // Get the earliest pending commission that's not yet claimable
+    const { data: pendingCommissions, error } = await supabase
       .from('commissions')
       .select('claimable_at, amount')
       .eq('ambassador_address', lowerAddress)
       .eq('is_claimed', false)
       .eq('is_eligible', true)
       .gt('claimable_at', now)
-      .order('claimable_at', { ascending: true })
-      .limit(1)
-      .single();
+      .order('claimable_at', { ascending: true });
     
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       console.error('Error getting next commission:', error);
       return null;
     }
     
-    if (!nextCommission) {
-      // Check if there are any claimable now
-      const { data: claimableNow } = await supabase
-        .from('commissions')
-        .select('amount')
-        .eq('ambassador_address', lowerAddress)
-        .eq('is_claimed', false)
-        .eq('is_eligible', true)
-        .lte('claimable_at', now);
-      
-      if (claimableNow && claimableNow.length > 0) {
-        const totalClaimable = claimableNow.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-        return {
-          hasClaimable: true,
-          claimableAmount: totalClaimable,
-          nextClaimDate: null,
-          daysUntilClaim: 0
-        };
-      }
-      
+    if (!pendingCommissions || pendingCommissions.length === 0) {
       return null;
     }
     
+    // Get the earliest one for countdown
+    const nextCommission = pendingCommissions[0];
     const claimableDate = new Date(nextCommission.claimable_at);
     const nowDate = new Date();
     const diffMs = claimableDate - nowDate;
     const daysUntil = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
     
+    // Sum up all pending commissions for total amount
+    const totalPending = pendingCommissions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    
     return {
       hasClaimable: false,
+      claimableAmount: 0,
       nextClaimDate: nextCommission.claimable_at,
-      nextClaimAmount: Number(nextCommission.amount || 0),
+      nextClaimAmount: totalPending,
       daysUntilClaim: Math.max(0, daysUntil)
     };
     
@@ -845,7 +850,72 @@ export async function getReferralTree(walletAddress, maxDepth = 5) {
 }
 
 /**
- * Get ambassador leaderboard
+ * Get ambassador leaderboard sorted by REFERRALS
+ */
+export async function getLeaderboardByReferrals(limit = 10) {
+  if (!supabase) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('ambassador_stats')
+      .select('wallet_address, total_referrals, total_earned, level_1_count')
+      .gt('total_referrals', 0)
+      .order('total_referrals', { ascending: false })
+      .limit(limit);
+    
+    if (error) {
+      console.error('Error getting referrals leaderboard:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error in getLeaderboardByReferrals:', error);
+    return [];
+  }
+}
+
+/**
+ * Get ambassador leaderboard sorted by COMMISSIONS EARNED
+ */
+export async function getLeaderboardByCommissions(limit = 10) {
+  if (!supabase) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('ambassador_stats')
+      .select('wallet_address, total_referrals, total_earned, pending_commissions')
+      .gt('total_earned', 0)
+      .order('total_earned', { ascending: false })
+      .limit(limit);
+    
+    if (error) {
+      console.error('Error getting commissions leaderboard:', error);
+      return [];
+    }
+    
+    // If no one has earned yet, show by pending commissions
+    if (!data || data.length === 0) {
+      const { data: pendingData, error: pendingError } = await supabase
+        .from('ambassador_stats')
+        .select('wallet_address, total_referrals, total_earned, pending_commissions')
+        .gt('pending_commissions', 0)
+        .order('pending_commissions', { ascending: false })
+        .limit(limit);
+      
+      if (pendingError) return [];
+      return pendingData || [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error in getLeaderboardByCommissions:', error);
+    return [];
+  }
+}
+
+/**
+ * Get ambassador leaderboard (legacy - for backwards compatibility)
  */
 export async function getAmbassadorLeaderboard(limit = 50) {
   if (!supabase) return [];
