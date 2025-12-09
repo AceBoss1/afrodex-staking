@@ -187,13 +187,16 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Total Referrals</div>
-          <div className="text-2xl font-bold text-orange-400 mt-1">{stats.totalReferrals}</div>
-          {nextCommission && (
-            nextCommission.hasClaimable ? (
-              <div className="text-xs text-green-400 mt-2">✓ {prettyNumber(nextCommission.claimableAmount)} AfroX ready to claim!</div>
-            ) : nextCommission.daysUntilClaim > 0 ? (
-              <div className="text-xs text-yellow-400 mt-2">⏳ {nextCommission.daysUntilClaim}d until 1st claim ({prettyNumber(nextCommission.nextClaimAmount)} AfroX)</div>
-            ) : null
+          <div className="text-2xl font-bold text-orange-400 mt-1">
+            {stats.totalReferrals}
+            {nextCommission && nextCommission.daysUntilClaim > 0 && (
+              <span className="text-sm font-normal text-yellow-400 ml-2">
+                ⏳ {nextCommission.daysUntilClaim}d ({prettyNumber(nextCommission.nextClaimAmount)} AfroX)
+              </span>
+            )}
+          </div>
+          {nextCommission && nextCommission.hasClaimable && (
+            <div className="text-xs text-green-400 mt-1">✓ {prettyNumber(nextCommission.claimableAmount)} AfroX ready!</div>
           )}
         </motion.div>
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
