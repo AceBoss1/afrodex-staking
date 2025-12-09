@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
-import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree, getClaimableCommissions, getNextCommissionInfo, getLeaderboardByReferrals, getLeaderboardByCommissions } from '../lib/supabaseClient';
+import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree, getClaimableCommissions, getNextCommissionInfo, getLeaderboardByReferrals, getLeaderboardByCommissions, getCommissionHistory } from '../lib/supabaseClient';
 import { formatUSD, calculateUSDValue } from '../lib/priceUtils';
 import { BADGE_TIERS, createDynamicReferralLink } from './AfrodexStaking';
 
@@ -33,6 +33,8 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
   const [leaderboardByCommissions, setLeaderboardByCommissions] = useState([]);
   const [claimableAmount, setClaimableAmount] = useState(0);
   const [nextCommission, setNextCommission] = useState(null);
+  const [commissionHistory, setCommissionHistory] = useState({ pending: [], matured: [], claimed: [] });
+  const [activeHistoryTab, setActiveHistoryTab] = useState('pending');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTreeView, setActiveTreeView] = useState('tree');
@@ -123,6 +125,12 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
       const nextCommissionInfo = await getNextCommissionInfo(address);
       setNextCommission(nextCommissionInfo);
 
+      // =============================================
+      // NEW: Fetch commission history (pending, matured, claimed)
+      // =============================================
+      const history = await getCommissionHistory(address);
+      setCommissionHistory(history);
+
     } catch (e) {
       console.error('Error loading ambassador data:', e);
     } finally {
@@ -199,21 +207,19 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Total Referrals</div>
-          <div className="text-2xl font-bold text-orange-400 mt-1">
-            {stats.totalReferrals}
-            {/* Show countdown if nextCommission has data */}
-            {nextCommission && nextCommission.daysUntilClaim > 0 && (
-              <span className="text-sm font-normal text-yellow-400 ml-2">
-                ⏳ {nextCommission.daysUntilClaim}d ({prettyNumber(nextCommission.nextClaimAmount)} AfroX)
-              </span>
-            )}
-            {/* Fallback: if no nextCommission data but there are pending commissions in stats */}
-            {!nextCommission && stats.pendingCommissions > 0 && (
-              <span className="text-sm font-normal text-yellow-400 ml-2">
-                ⏳ ~30d ({prettyNumber(stats.pendingCommissions)} AfroX)
-              </span>
-            )}
-          </div>
+          <div className="text-2xl font-bold text-orange-400 mt-1">{stats.totalReferrals}</div>
+          {/* Show countdown on new line */}
+          {nextCommission && nextCommission.daysUntilClaim > 0 && (
+            <div className="text-sm text-yellow-400 mt-1">
+              ⏳ {nextCommission.daysUntilClaim}d ({prettyNumber(nextCommission.nextClaimAmount)} AfroX)
+            </div>
+          )}
+          {/* Fallback: if no nextCommission data but there are pending commissions in stats */}
+          {!nextCommission && stats.pendingCommissions > 0 && (
+            <div className="text-sm text-yellow-400 mt-1">
+              ⏳ ~30d ({prettyNumber(stats.pendingCommissions)} AfroX)
+            </div>
+          )}
           {nextCommission && nextCommission.hasClaimable && (
             <div className="text-xs text-green-400 mt-1">✓ {prettyNumber(nextCommission.claimableAmount)} AfroX ready!</div>
           )}
@@ -376,6 +382,113 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
               {availableToClaim > 0 ? 'Claim Now' : 'Nothing to Claim'}
             </button>
           </div>
+        </div>
+      </motion.div>
+
+      {/* Commission History */}
+      <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mb-6" whileHover={cardGlow}>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">📜 Commission History</h2>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setActiveHistoryTab('pending')} 
+              className={`px-3 py-1 rounded text-sm ${activeHistoryTab === 'pending' ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-400'}`}
+            >
+              ⏳ Pending ({commissionHistory.pending.length})
+            </button>
+            <button 
+              onClick={() => setActiveHistoryTab('matured')} 
+              className={`px-3 py-1 rounded text-sm ${activeHistoryTab === 'matured' ? 'bg-green-500 text-black' : 'bg-gray-800 text-gray-400'}`}
+            >
+              ✓ Ready ({commissionHistory.matured.length})
+            </button>
+            <button 
+              onClick={() => setActiveHistoryTab('claimed')} 
+              className={`px-3 py-1 rounded text-sm ${activeHistoryTab === 'claimed' ? 'bg-blue-500 text-black' : 'bg-gray-800 text-gray-400'}`}
+            >
+              💸 Claimed ({commissionHistory.claimed.length})
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {/* Pending Commissions */}
+          {activeHistoryTab === 'pending' && (
+            commissionHistory.pending.length > 0 ? (
+              commissionHistory.pending.map((commission, index) => {
+                const colors = LEVEL_COLORS[commission.level] || LEVEL_COLORS[1];
+                return (
+                  <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${colors.bg} border ${colors.border}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${colors.text}`}>L{commission.level}</span>
+                      <div>
+                        <div className={`text-sm font-semibold ${colors.text}`}>{prettyNumber(commission.amount)} AfroX</div>
+                        <div className="text-xs text-gray-400">from {shortAddr(commission.referee_address)}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-yellow-400 font-semibold">⏳ {commission.displayText}</div>
+                      <div className="text-xs text-gray-500">until claimable</div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center p-8 bg-gray-800 rounded text-gray-400">No pending commissions</div>
+            )
+          )}
+
+          {/* Matured Commissions (Ready to Claim) */}
+          {activeHistoryTab === 'matured' && (
+            commissionHistory.matured.length > 0 ? (
+              commissionHistory.matured.map((commission, index) => {
+                const colors = LEVEL_COLORS[commission.level] || LEVEL_COLORS[1];
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-green-500/20 border border-green-500">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${colors.text}`}>L{commission.level}</span>
+                      <div>
+                        <div className="text-sm font-semibold text-green-400">{prettyNumber(commission.amount)} AfroX</div>
+                        <div className="text-xs text-gray-400">from {shortAddr(commission.referee_address)}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-green-400 font-semibold">✓ Ready</div>
+                      <div className="text-xs text-gray-500">matured {commission.displayText}</div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center p-8 bg-gray-800 rounded text-gray-400">No matured commissions ready to claim</div>
+            )
+          )}
+
+          {/* Claimed Commissions */}
+          {activeHistoryTab === 'claimed' && (
+            commissionHistory.claimed.length > 0 ? (
+              commissionHistory.claimed.map((commission, index) => {
+                const colors = LEVEL_COLORS[commission.level] || LEVEL_COLORS[1];
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-blue-500/20 border border-blue-500/50">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded text-xs font-bold ${colors.text}`}>L{commission.level}</span>
+                      <div>
+                        <div className="text-sm font-semibold text-blue-400">{prettyNumber(commission.amount)} AfroX</div>
+                        <div className="text-xs text-gray-400">from {shortAddr(commission.referee_address)}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-blue-400 font-semibold">💸 Claimed</div>
+                      <div className="text-xs text-gray-500">{commission.displayText}</div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center p-8 bg-gray-800 rounded text-gray-400">No claimed commissions yet</div>
+            )
+          )}
         </div>
       </motion.div>
 
