@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
-import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree, getClaimableCommissions, getNextCommissionInfo } from '../lib/supabaseClient';
+import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree, getClaimableCommissions, getNextCommissionInfo, getLeaderboardByReferrals, getLeaderboardByCommissions } from '../lib/supabaseClient';
 import { formatUSD, calculateUSDValue } from '../lib/priceUtils';
 import { BADGE_TIERS, createDynamicReferralLink } from './AfrodexStaking';
 
@@ -29,7 +29,8 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
   const [referralLink, setReferralLink] = useState('');
   const [stats, setStats] = useState({ totalReferrals: 0, l1: 0, l2: 0, l3: 0, l4: 0, l5: 0, totalEarned: 0, totalClaimed: 0, pendingCommissions: 0 });
   const [referralTree, setReferralTree] = useState([]);
-  const [leaderboard, setLeaderboard] = useState([]);
+  const [leaderboardByReferrals, setLeaderboardByReferrals] = useState([]);
+  const [leaderboardByCommissions, setLeaderboardByCommissions] = useState([]);
   const [claimableAmount, setClaimableAmount] = useState(0);
   const [nextCommission, setNextCommission] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -66,17 +67,28 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
       }
       
       // =============================================
-      // FIX: Fetch leaderboard with proper field mapping
+      // FIX: Fetch TWO leaderboards - by referrals and by commissions
       // =============================================
-      const leaderboardData = await getAmbassadorLeaderboard(100);
-      if (leaderboardData && leaderboardData.length > 0) {
-        setLeaderboard(leaderboardData.map(item => ({
-          wallet: item.wallet || item.ambassador_address || item.wallet_address,
-          totalCommissions: parseFloat(item.total_earned) || 0,
-          totalReferrals: item.total_referrals || item.l1_count || 0
+      const refLeaderboard = await getLeaderboardByReferrals(10);
+      if (refLeaderboard && refLeaderboard.length > 0) {
+        setLeaderboardByReferrals(refLeaderboard.map(item => ({
+          wallet: item.wallet_address,
+          totalReferrals: item.total_referrals || 0,
+          totalCommissions: parseFloat(item.total_earned) || 0
         })));
       } else {
-        setLeaderboard([]);
+        setLeaderboardByReferrals([]);
+      }
+
+      const commLeaderboard = await getLeaderboardByCommissions(10);
+      if (commLeaderboard && commLeaderboard.length > 0) {
+        setLeaderboardByCommissions(commLeaderboard.map(item => ({
+          wallet: item.wallet_address,
+          totalReferrals: item.total_referrals || 0,
+          totalCommissions: parseFloat(item.total_earned) || parseFloat(item.pending_commissions) || 0
+        })));
+      } else {
+        setLeaderboardByCommissions([]);
       }
       
       // =============================================
@@ -189,9 +201,16 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
           <div className="text-sm text-gray-400">Total Referrals</div>
           <div className="text-2xl font-bold text-orange-400 mt-1">
             {stats.totalReferrals}
+            {/* Show countdown if nextCommission has data */}
             {nextCommission && nextCommission.daysUntilClaim > 0 && (
               <span className="text-sm font-normal text-yellow-400 ml-2">
                 ⏳ {nextCommission.daysUntilClaim}d ({prettyNumber(nextCommission.nextClaimAmount)} AfroX)
+              </span>
+            )}
+            {/* Fallback: if no nextCommission data but there are pending commissions in stats */}
+            {!nextCommission && stats.pendingCommissions > 0 && (
+              <span className="text-sm font-normal text-yellow-400 ml-2">
+                ⏳ ~30d ({prettyNumber(stats.pendingCommissions)} AfroX)
               </span>
             )}
           </div>
@@ -360,30 +379,58 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
         </div>
       </motion.div>
 
-      {/* Leaderboard */}
-      <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20 mb-6" whileHover={cardGlow}>
-        <h2 className="text-xl font-bold mb-4">🏆 Top Ambassadors</h2>
-        {leaderboard.length > 0 ? (
-          <div className="space-y-2">
-            {leaderboard.slice(0, 10).map((item, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                <div className="flex items-center gap-3">
-                  <div className={`text-lg font-bold ${index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
-                    #{index + 1}
+      {/* Leaderboards - Two Cards Side by Side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Left: Top by Referrals */}
+        <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20" whileHover={cardGlow}>
+          <h2 className="text-xl font-bold mb-4">🏆 Top by Referrals</h2>
+          {leaderboardByReferrals.length > 0 ? (
+            <div className="space-y-2">
+              {leaderboardByReferrals.slice(0, 10).map((item, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-800 rounded">
+                  <div className="flex items-center gap-3">
+                    <div className={`text-lg font-bold ${index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
+                      #{index + 1}
+                    </div>
+                    <span className="text-sm">{shortAddr(item.wallet)}</span>
                   </div>
-                  <span className="text-sm">{shortAddr(item.wallet)}</span>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-blue-400">{item.totalReferrals}</div>
+                    <div className="text-xs text-gray-400">referrals</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-green-400">{prettyNumber(item.totalCommissions)} AfroX</div>
-                  <div className="text-xs text-gray-400">{item.totalReferrals || 0} referrals</div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center p-8 bg-gray-800 rounded text-gray-400">No referrals yet</div>
+          )}
+        </motion.div>
+
+        {/* Right: Top by Commissions */}
+        <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20" whileHover={cardGlow}>
+          <h2 className="text-xl font-bold mb-4">💰 Top by Earnings</h2>
+          {leaderboardByCommissions.length > 0 ? (
+            <div className="space-y-2">
+              {leaderboardByCommissions.slice(0, 10).map((item, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-800 rounded">
+                  <div className="flex items-center gap-3">
+                    <div className={`text-lg font-bold ${index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : index === 2 ? 'text-orange-600' : 'text-gray-500'}`}>
+                      #{index + 1}
+                    </div>
+                    <span className="text-sm">{shortAddr(item.wallet)}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-green-400">{prettyNumber(item.totalCommissions)} AfroX</div>
+                    {afroxPrice && <div className="text-xs text-green-500">≈ {formatUSD(calculateUSDValue(item.totalCommissions, afroxPrice))}</div>}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center p-8 bg-gray-800 rounded text-gray-400">Leaderboard will populate as ambassadors earn commissions</div>
-        )}
-      </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center p-8 bg-gray-800 rounded text-gray-400">No earnings yet</div>
+          )}
+        </motion.div>
+      </div>
 
       {/* Tier Progression */}
       <motion.div className="bg-gray-900 p-6 rounded-xl border border-orange-600/20" whileHover={cardGlow}>
