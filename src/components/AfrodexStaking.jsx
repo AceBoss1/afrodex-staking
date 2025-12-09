@@ -1,14 +1,5 @@
 // src/components/AfrodexStaking.jsx - WITH SUPABASE INTEGRATION
-// Based on your existing component structure
-// ADDED: Supabase calls for recording staking events, referrals, and commissions
-//
-// ⚠️ SECURITY NOTE (CVE-2025-66478): 
-// If you're using Next.js 15.x or 16.x with App Router, update to a patched version:
-// - Next.js 15.0.5, 15.1.9, 15.2.6, 15.3.6, 15.4.8, 15.5.7, or 16.0.7
-// Run: npm install next@15.5.7 (or your preferred patched version)
-// Next.js 13.x and 14.x stable are NOT affected.
-// See: https://nextjs.org/blog/CVE-2025-66478
-//
+// FIXED: Transaction hash capture, block number, and commission recording
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,9 +16,6 @@ import GovernanceDashboard from './GovernanceDashboard';
 import AfroSwap from './AfroSwap';
 import { getAfroxPriceUSD, formatUSD, calculateUSDValue } from '../lib/priceUtils';
 
-// =============================================
-// SUPABASE IMPORTS - ADD THESE
-// =============================================
 import {
   initializeUserOnConnect,
   getUser,
@@ -66,13 +54,11 @@ export function getBadgeTierFromStake(stakedBalance) {
   return BADGE_TIERS[BADGE_TIERS.length - 1];
 }
 
-// Dynamic referral link - uses current domain (works for both dashboard.afrox.one and hub.afrox.one)
 export function createDynamicReferralLink(referralCode) {
   if (typeof window === 'undefined') return `https://hub.afrox.one/?ref=${referralCode}`;
   return `${window.location.origin}/?ref=${referralCode}`;
 }
 
-// Social Links for Footer
 const SOCIAL_LINKS = [
   { name: 'Facebook', url: 'https://fb.me/AfroDex1', icon: (
     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
@@ -101,7 +87,6 @@ export function SharedFooter() {
   return (
     <footer className="border-t border-gray-800 py-6 mt-8">
       <div className="max-w-6xl mx-auto px-6">
-        {/* Social Links + User Guide */}
         <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
           {SOCIAL_LINKS.map((social) => (
             <a
@@ -115,7 +100,6 @@ export function SharedFooter() {
               {social.icon}
             </a>
           ))}
-          {/* User Guide Link */}
           <a
             href="/guide"
             className="flex items-center gap-2 px-3 py-2 bg-orange-500/20 border border-orange-500/50 rounded-lg hover:bg-orange-500/30 text-orange-400 transition-colors"
@@ -128,7 +112,6 @@ export function SharedFooter() {
           </a>
         </div>
 
-        {/* Support Emails */}
         <div className="flex justify-center items-center gap-6 mb-6 flex-wrap text-sm">
           <a href="mailto:support@afrox.one" className="text-gray-400 hover:text-orange-400 transition-colors">
             📧 Support: support@afrox.one
@@ -141,12 +124,10 @@ export function SharedFooter() {
           </a>
         </div>
 
-        {/* Disclaimer */}
         <div className="p-4 bg-[#0b0b0b] rounded border border-gray-800 text-sm text-gray-300 mb-4">
           ⚠️ <strong>Important Disclaimer:</strong> By using this platform you confirm you are of legal age, live in a jurisdiction where the specific crypto related activity you want to perform is permitted, and accept all liability and risk.
         </div>
 
-        {/* Copyright */}
         <div className="text-center text-sm text-gray-400">
           © 2019-Present AFRODEX. All rights reserved | ❤️ Donations: 0xC54f68D1eD99e0B51C162F9a058C2a0A88D2ce2A
         </div>
@@ -175,7 +156,6 @@ export default function AfrodexStaking() {
   const { data: walletClient } = useWalletClient();
   const searchParams = useSearchParams();
 
-  // Your existing state variables
   const [decimals, setDecimals] = useState(DEFAULT_DECIMALS);
   const [walletBalance, setWalletBalance] = useState('0');
   const [stakedBalance, setStakedBalance] = useState('0');
@@ -194,13 +174,9 @@ export default function AfrodexStaking() {
   const [showAfroSwap, setShowAfroSwap] = useState(false);
   const [activeTab, setActiveTab] = useState('staking');
 
-  // =============================================
-  // NEW: SUPABASE STATE VARIABLES
-  // =============================================
   const [dbUser, setDbUser] = useState(null);
   const [stakingHistory, setStakingHistory] = useState([]);
 
-  // Your existing useEffects for page title and URL routing
   useEffect(() => {
     document.title = 'AfroX DeFi Hub | Stake, Mint, Mine, Swap, Earn & Govern';
   }, []);
@@ -220,9 +196,6 @@ export default function AfrodexStaking() {
     window.history.pushState({}, '', newUrl);
   };
 
-  // =============================================
-  // NEW: INITIALIZE USER ON WALLET CONNECT
-  // =============================================
   useEffect(() => {
     const initUser = async () => {
       if (!isConnected || !address) {
@@ -231,10 +204,7 @@ export default function AfrodexStaking() {
       }
 
       try {
-        // Get referral code from URL if present
         const refCode = searchParams?.get('ref') || null;
-        
-        // Initialize user in Supabase (creates if new, handles referral registration)
         const user = await initializeUserOnConnect(address, refCode);
         setDbUser(user);
         
@@ -242,7 +212,6 @@ export default function AfrodexStaking() {
           console.log(`📎 User connected with referral code: ${refCode}`);
         }
 
-        // Load staking history from database
         const history = await getStakingHistory(address, 20);
         setStakingHistory(history);
         
@@ -254,13 +223,11 @@ export default function AfrodexStaking() {
     initUser();
   }, [isConnected, address, searchParams]);
 
-  // Your existing helper functions
   const showAlert = (m, t = 6000) => { setAlertMsg(String(m)); setTimeout(() => setAlertMsg(null), t); };
   const toHuman = useCallback((raw) => { try { return raw ? formatUnits(raw, decimals) : '0'; } catch { return '0'; } }, [decimals]);
   const toRaw = useCallback((human) => { try { return parseUnits(String(human || '0'), decimals); } catch { return 0n; } }, [decimals]);
   function prettyNumber(humanStr, precision = 2) { const n = Number(humanStr || '0'); if (!Number.isFinite(n)) return '0'; if (Math.abs(n) >= 1e15) return (n / 1e15).toFixed(precision) + 'Q'; if (Math.abs(n) >= 1e12) return (n / 1e12).toFixed(precision) + 'T'; if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(precision) + 'B'; if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(precision) + 'M'; if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(precision) + 'K'; return n.toLocaleString(undefined, { maximumFractionDigits: precision }); }
 
-  // Your existing fetchOnChain function
   const fetchOnChain = useCallback(async () => {
     if (!publicClient) return;
     try {
@@ -282,9 +249,6 @@ export default function AfrodexStaking() {
 
   useEffect(() => { fetchOnChain(); let t; if (isConnected) t = setInterval(fetchOnChain, 30_000); return () => clearInterval(t); }, [fetchOnChain, isConnected]);
 
-  // =============================================
-  // NEW: SYNC STAKED BALANCE TO SUPABASE
-  // =============================================
   useEffect(() => {
     const syncStakeToDb = async () => {
       if (!address || !stakedBalance) return;
@@ -299,26 +263,50 @@ export default function AfrodexStaking() {
       }
     };
 
-    // Debounce to avoid too many updates
     const timeout = setTimeout(syncStakeToDb, 3000);
     return () => clearTimeout(timeout);
   }, [address, stakedBalance]);
 
-  // Your existing computed values
   const stakedDays = useMemo(() => { const ref = lastUnstakeTs > 0 ? lastUnstakeTs : lastRewardTs; if (!ref || ref <= 0) return 0; return Math.floor((Date.now() / 1000 - ref) / 86400); }, [lastUnstakeTs, lastRewardTs]);
   const projections = useMemo(() => { const p = Number(stakedBalance || '0'); if (!p || p <= 0) return { hourly: 0, daily: 0, monthly: 0, yearly: 0 }; const baseDaily = p * DAILY_RATE_DEC; const bonusDaily = stakedDays >= FIRST_30_DAYS ? p * BONUS_DAILY_DEC : 0; const daily = baseDaily + bonusDaily; return { hourly: daily / 24, daily, monthly: daily * 30, yearly: (p * DAILY_RATE_DEC * FIRST_30_DAYS) + (p * (DAILY_RATE_DEC + BONUS_DAILY_DEC) * REMAINING_DAYS) }; }, [stakedBalance, stakedDays]);
   const badgeTier = useMemo(() => getBadgeTierFromStake(stakedBalance), [stakedBalance]);
   const ensureClient = () => { if (!walletClient) throw new Error('Wallet not connected'); return walletClient; };
 
   // =============================================
-  // UPDATED: doApprove (no changes needed)
+  // FIXED: Helper to get transaction receipt and block number
   // =============================================
+  async function getTransactionDetails(txHash) {
+    if (!publicClient || !txHash) return { blockNumber: null };
+    try {
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      return {
+        blockNumber: receipt.blockNumber ? Number(receipt.blockNumber) : null,
+        status: receipt.status
+      };
+    } catch (err) {
+      console.error('Error getting transaction receipt:', err);
+      return { blockNumber: null };
+    }
+  }
+
   async function doApprove(amountHuman) {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
       setLoading(true);
-      const tx = await writeContractSafe(ensureClient(), { address: TOKEN_ADDRESS, abi: AFROX_PROXY_ABI, functionName: 'approve', args: [STAKING_ADDRESS, toRaw(amountHuman)] });
-      setTxHash(tx?.hash ?? null);
+      // FIX: writeContract returns hash directly in wagmi v2
+      const txHashResult = await writeContractSafe(ensureClient(), { 
+        address: TOKEN_ADDRESS, 
+        abi: AFROX_PROXY_ABI, 
+        functionName: 'approve', 
+        args: [STAKING_ADDRESS, toRaw(amountHuman)] 
+      });
+      setTxHash(txHashResult ?? null);
+      
+      // Wait for confirmation
+      if (txHashResult && publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash: txHashResult });
+      }
+      
       await fetchOnChain();
       showAlert('Approve confirmed');
     } catch (err) {
@@ -329,7 +317,7 @@ export default function AfrodexStaking() {
   }
 
   // =============================================
-  // UPDATED: doStake WITH SUPABASE RECORDING
+  // FIXED: doStake with proper hash and block capture
   // =============================================
   async function doStake(humanAmount) {
     try {
@@ -337,18 +325,36 @@ export default function AfrodexStaking() {
       if (!humanAmount || Number(humanAmount) <= 0) { showAlert('Enter amount'); return; }
       setLoading(true);
       
-      const tx = await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'stake', args: [toRaw(humanAmount)] });
-      const txHashResult = tx?.hash ?? null;
-      setTxHash(txHashResult);
+      const amountNum = Number(humanAmount);
+      console.log(`🔄 Staking ${amountNum} AfroX...`);
+      
+      // FIX: writeContract returns hash directly, not {hash: ...}
+      const txHashResult = await writeContractSafe(ensureClient(), { 
+        address: STAKING_ADDRESS, 
+        abi: STAKING_ABI, 
+        functionName: 'stake', 
+        args: [toRaw(humanAmount)] 
+      });
+      
+      console.log(`📝 Transaction hash: ${txHashResult}`);
+      setTxHash(txHashResult ?? null);
+      
+      // FIX: Wait for receipt and get block number
+      let blockNumber = null;
+      if (txHashResult && publicClient) {
+        const txDetails = await getTransactionDetails(txHashResult);
+        blockNumber = txDetails.blockNumber;
+        console.log(`📦 Block number: ${blockNumber}`);
+      }
       
       // =============================================
-      // SUPABASE: RECORD STAKING EVENT
+      // FIXED: Record staking event with proper data
       // =============================================
       if (txHashResult && address) {
-        const amountNum = Number(humanAmount);
+        console.log(`💾 Recording stake: ${amountNum} AfroX, TX: ${txHashResult}, Block: ${blockNumber}`);
         
-        // Record the staking event (this also calculates commissions automatically)
-        await recordStakingEvent(address, 'stake', amountNum, txHashResult);
+        // Record the staking event with all data
+        await recordStakingEvent(address, 'stake', amountNum, txHashResult, blockNumber);
         
         // Update user's total stake in database
         const newTotal = Number(stakedBalance) + amountNum;
@@ -358,13 +364,14 @@ export default function AfrodexStaking() {
         const history = await getStakingHistory(address, 20);
         setStakingHistory(history);
         
-        console.log(`✅ Stake recorded to Supabase: ${humanAmount} AfroX, TX: ${txHashResult}`);
+        console.log(`✅ Stake recorded to Supabase successfully`);
       }
       
       showAlert('Stake confirmed');
       setStakeAmount('');
       await fetchOnChain();
     } catch (err) {
+      console.error('Stake error:', err);
       showAlert('Stake failed: ' + (err?.message ?? err));
     } finally {
       setLoading(false);
@@ -372,7 +379,7 @@ export default function AfrodexStaking() {
   }
 
   // =============================================
-  // UPDATED: doUnstake WITH SUPABASE RECORDING
+  // FIXED: doUnstake with proper hash and block capture
   // =============================================
   async function doUnstake(humanAmount) {
     try {
@@ -380,34 +387,50 @@ export default function AfrodexStaking() {
       if (!humanAmount || Number(humanAmount) <= 0) { showAlert('Enter amount'); return; }
       setLoading(true);
       
-      const tx = await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'unstake', args: [toRaw(humanAmount)] });
-      const txHashResult = tx?.hash ?? null;
-      setTxHash(txHashResult);
+      const amountNum = Number(humanAmount);
+      console.log(`🔄 Unstaking ${amountNum} AfroX...`);
+      
+      // FIX: writeContract returns hash directly
+      const txHashResult = await writeContractSafe(ensureClient(), { 
+        address: STAKING_ADDRESS, 
+        abi: STAKING_ABI, 
+        functionName: 'unstake', 
+        args: [toRaw(humanAmount)] 
+      });
+      
+      console.log(`📝 Transaction hash: ${txHashResult}`);
+      setTxHash(txHashResult ?? null);
+      
+      // FIX: Wait for receipt and get block number
+      let blockNumber = null;
+      if (txHashResult && publicClient) {
+        const txDetails = await getTransactionDetails(txHashResult);
+        blockNumber = txDetails.blockNumber;
+        console.log(`📦 Block number: ${blockNumber}`);
+      }
       
       // =============================================
-      // SUPABASE: RECORD UNSTAKING EVENT
+      // FIXED: Record unstaking event with proper data
       // =============================================
       if (txHashResult && address) {
-        const amountNum = Number(humanAmount);
+        console.log(`💾 Recording unstake: ${amountNum} AfroX, TX: ${txHashResult}, Block: ${blockNumber}`);
         
-        // Record the unstaking event
-        await recordStakingEvent(address, 'unstake', amountNum, txHashResult);
+        await recordStakingEvent(address, 'unstake', amountNum, txHashResult, blockNumber);
         
-        // Update user's total stake in database
         const newTotal = Math.max(0, Number(stakedBalance) - amountNum);
         await updateUserStake(address, newTotal);
         
-        // Refresh staking history
         const history = await getStakingHistory(address, 20);
         setStakingHistory(history);
         
-        console.log(`✅ Unstake recorded to Supabase: ${humanAmount} AfroX, TX: ${txHashResult}`);
+        console.log(`✅ Unstake recorded to Supabase successfully`);
       }
       
       showAlert('Unstake confirmed');
       setUnstakeAmount('');
       await fetchOnChain();
     } catch (err) {
+      console.error('Unstake error:', err);
       showAlert('Unstake failed: ' + (err?.message ?? err));
     } finally {
       setLoading(false);
@@ -415,7 +438,7 @@ export default function AfrodexStaking() {
   }
 
   // =============================================
-  // UPDATED: doClaim WITH SUPABASE RECORDING
+  // FIXED: doClaim with proper hash capture
   // =============================================
   async function doClaim() {
     try {
@@ -423,28 +446,49 @@ export default function AfrodexStaking() {
       setLoading(true);
       const tiny = parseUnits('0.0001', decimals);
       
-      const tx1 = await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'unstake', args: [tiny] });
-      await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'stake', args: [tiny] });
+      console.log(`🔄 Claiming rewards...`);
+      
+      // FIX: Get hash directly
+      const txHash1 = await writeContractSafe(ensureClient(), { 
+        address: STAKING_ADDRESS, 
+        abi: STAKING_ABI, 
+        functionName: 'unstake', 
+        args: [tiny] 
+      });
+      
+      // Wait for first tx
+      let blockNumber = null;
+      if (txHash1 && publicClient) {
+        const txDetails = await getTransactionDetails(txHash1);
+        blockNumber = txDetails.blockNumber;
+      }
+      
+      await writeContractSafe(ensureClient(), { 
+        address: STAKING_ADDRESS, 
+        abi: STAKING_ABI, 
+        functionName: 'stake', 
+        args: [tiny] 
+      });
       
       // =============================================
-      // SUPABASE: RECORD CLAIM EVENT
+      // FIXED: Record claim event with proper data
       // =============================================
-      if (tx1?.hash && address) {
+      if (txHash1 && address) {
         const rewardsNum = Number(rewardsAccum);
+        console.log(`💾 Recording claim: ${rewardsNum} AfroX, TX: ${txHash1}, Block: ${blockNumber}`);
         
-        // Record the claim event
-        await recordStakingEvent(address, 'claim', rewardsNum, tx1.hash);
+        await recordStakingEvent(address, 'claim', rewardsNum, txHash1, blockNumber);
         
-        // Refresh staking history
         const history = await getStakingHistory(address, 20);
         setStakingHistory(history);
         
-        console.log(`✅ Claim recorded to Supabase: ${rewardsNum} AfroX, TX: ${tx1.hash}`);
+        console.log(`✅ Claim recorded to Supabase successfully`);
       }
       
       showAlert('Claim executed');
       await fetchOnChain();
     } catch (err) {
+      console.error('Claim error:', err);
       showAlert('Claim failed: ' + (err?.message ?? err));
     } finally {
       setLoading(false);
@@ -453,12 +497,8 @@ export default function AfrodexStaking() {
 
   const cardGlow = { boxShadow: '0 0 18px rgba(255,140,0,0.12)' };
 
-  // =============================================
-  // YOUR EXISTING RETURN/JSX - NO CHANGES NEEDED
-  // =============================================
   return (
     <div className="min-h-screen w-full bg-black text-white antialiased">
-      {/* Header with two different logos */}
       <header className="max-w-6xl mx-auto px-6 py-6">
         <div className="flex items-center justify-center gap-8">
           <img src={LOGO_LEFT} alt="AFRODEX" className="h-24 w-24 rounded-full" />
@@ -471,7 +511,6 @@ export default function AfrodexStaking() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 pb-4">
-        {/* Navigation Tabs */}
         <div className="flex gap-2 mb-6 flex-wrap justify-center">
           <button onClick={() => handleTabChange('staking')} className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${activeTab === 'staking' ? 'bg-orange-500 text-black' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'}`}>AfroX Staking Dashboard</button>
           <button onClick={() => handleTabChange('lp-mining')} className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm ${activeTab === 'lp-mining' ? 'bg-orange-500 text-black' : 'bg-gray-900 text-gray-300 hover:bg-gray-800'}`}>LP Token Lock-Mining Dashboard</button>
@@ -491,7 +530,6 @@ export default function AfrodexStaking() {
             </section>
             
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Approve & Stake */}
               <motion.div className="bg-gray-900 p-6 rounded-3xl" whileHover={{ scale: 1.01 }}>
                 <h2 className="text-xl font-bold mb-3">Approve & Stake</h2>
                 <div className="text-sm text-gray-400 mb-4">Approve AfroX (only if required) then stake.</div>
@@ -510,7 +548,6 @@ export default function AfrodexStaking() {
                 </div>
               </motion.div>
 
-              {/* Unstake & Claim */}
               <motion.div className="bg-gray-900 p-6 rounded-3xl" whileHover={{ scale: 1.01 }}>
                 <h2 className="text-xl font-bold mb-3">Unstake & Claim</h2>
                 <div className="text-sm text-gray-400 mb-4">Unstake tokens (this also auto-claims rewards).</div>
@@ -531,7 +568,6 @@ export default function AfrodexStaking() {
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Reward Projections */}
               <motion.div className="bg-gray-900 p-6 rounded-3xl border border-orange-600/10" whileHover={cardGlow}>
                 <h2 className="text-xl font-bold mb-4">Reward Projections</h2>
                 <div className="grid grid-cols-2 gap-4">
