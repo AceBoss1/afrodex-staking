@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
-import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree, getClaimableCommissions } from '../lib/supabaseClient';
+import { getAmbassadorStats, getAmbassadorLeaderboard, getReferralTree, getClaimableCommissions, getNextCommissionInfo } from '../lib/supabaseClient';
 import { formatUSD, calculateUSDValue } from '../lib/priceUtils';
 import { BADGE_TIERS, createDynamicReferralLink } from './AfrodexStaking';
 
@@ -31,6 +31,7 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
   const [referralTree, setReferralTree] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [claimableAmount, setClaimableAmount] = useState(0);
+  const [nextCommission, setNextCommission] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTreeView, setActiveTreeView] = useState('tree');
@@ -103,6 +104,12 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
       } else {
         setClaimableAmount(0);
       }
+
+      // =============================================
+      // NEW: Fetch next commission claim info for countdown
+      // =============================================
+      const nextCommissionInfo = await getNextCommissionInfo(address);
+      setNextCommission(nextCommissionInfo);
 
     } catch (e) {
       console.error('Error loading ambassador data:', e);
@@ -181,6 +188,13 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Total Referrals</div>
           <div className="text-2xl font-bold text-orange-400 mt-1">{stats.totalReferrals}</div>
+          {nextCommission && (
+            nextCommission.hasClaimable ? (
+              <div className="text-xs text-green-400 mt-2">✓ {prettyNumber(nextCommission.claimableAmount)} AfroX ready to claim!</div>
+            ) : nextCommission.daysUntilClaim > 0 ? (
+              <div className="text-xs text-yellow-400 mt-2">⏳ {nextCommission.daysUntilClaim}d until 1st claim ({prettyNumber(nextCommission.nextClaimAmount)} AfroX)</div>
+            ) : null
+          )}
         </motion.div>
         <motion.div className="bg-gray-900 p-4 rounded-xl border border-orange-600/10" whileHover={cardGlow}>
           <div className="text-sm text-gray-400">Total Earned</div>
