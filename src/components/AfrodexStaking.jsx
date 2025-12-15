@@ -1,5 +1,5 @@
 // src/components/AfrodexStaking.jsx - WITH SUPABASE INTEGRATION
-// FIXED: Transaction hash capture, block number, and commission recording
+// FIXED: Correct reward rates (0.06% daily), transaction hash capture, block number, commission recording
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -30,10 +30,16 @@ const TOKEN_LOGO = '/afrodex_token.png';
 const LOGO_LEFT = '/afrodex_logoT.png';
 const LOGO_RIGHT = '/afrodex_logoA.png';
 const DEFAULT_DECIMALS = 4;
+
+// =============================================
+// FIXED: Correct Reward Rate Constants
+// rewardRate = 60 → 0.06% daily (60 / 100000)
+// bonusRate = 6 → 0.006% daily bonus after 30 days
+// =============================================
 const REWARD_RATE = 60n;
 const BONUS_RATE = 6n;
-const DAILY_RATE_DEC = Number(REWARD_RATE) / 10000;
-const BONUS_DAILY_DEC = Number(BONUS_RATE) / 10000;
+const DAILY_RATE_DEC = Number(REWARD_RATE) / 100000;  // 0.0006 = 0.06%
+const BONUS_DAILY_DEC = Number(BONUS_RATE) / 100000;  // 0.00006 = 0.006%
 const FIRST_30_DAYS = 30;
 const REMAINING_DAYS = 365 - 30;
 
@@ -252,247 +258,124 @@ export default function AfrodexStaking() {
   useEffect(() => {
     const syncStakeToDb = async () => {
       if (!address || !stakedBalance) return;
-      
       try {
         const stakedNum = Number(stakedBalance);
-        if (stakedNum >= 0) {
-          await updateUserStake(address, stakedNum);
-        }
-      } catch (err) {
-        console.error('Error syncing stake to DB:', err);
-      }
+        if (stakedNum >= 0) { await updateUserStake(address, stakedNum); }
+      } catch (err) { console.error('Error syncing stake to DB:', err); }
     };
-
     const timeout = setTimeout(syncStakeToDb, 3000);
     return () => clearTimeout(timeout);
   }, [address, stakedBalance]);
 
   const stakedDays = useMemo(() => { const ref = lastUnstakeTs > 0 ? lastUnstakeTs : lastRewardTs; if (!ref || ref <= 0) return 0; return Math.floor((Date.now() / 1000 - ref) / 86400); }, [lastUnstakeTs, lastRewardTs]);
-  const projections = useMemo(() => { const p = Number(stakedBalance || '0'); if (!p || p <= 0) return { hourly: 0, daily: 0, monthly: 0, yearly: 0 }; const baseDaily = p * DAILY_RATE_DEC; const bonusDaily = stakedDays >= FIRST_30_DAYS ? p * BONUS_DAILY_DEC : 0; const daily = baseDaily + bonusDaily; return { hourly: daily / 24, daily, monthly: daily * 30, yearly: (p * DAILY_RATE_DEC * FIRST_30_DAYS) + (p * (DAILY_RATE_DEC + BONUS_DAILY_DEC) * REMAINING_DAYS) }; }, [stakedBalance, stakedDays]);
+  
+  const projections = useMemo(() => { 
+    const p = Number(stakedBalance || '0'); 
+    if (!p || p <= 0) return { hourly: 0, daily: 0, monthly: 0, yearly: 0 }; 
+    const baseDaily = p * DAILY_RATE_DEC; 
+    const bonusDaily = stakedDays >= FIRST_30_DAYS ? p * BONUS_DAILY_DEC : 0; 
+    const daily = baseDaily + bonusDaily; 
+    return { hourly: daily / 24, daily, monthly: daily * 30, yearly: (p * DAILY_RATE_DEC * FIRST_30_DAYS) + (p * (DAILY_RATE_DEC + BONUS_DAILY_DEC) * REMAINING_DAYS) }; 
+  }, [stakedBalance, stakedDays]);
+  
   const badgeTier = useMemo(() => getBadgeTierFromStake(stakedBalance), [stakedBalance]);
   const ensureClient = () => { if (!walletClient) throw new Error('Wallet not connected'); return walletClient; };
 
-  // =============================================
-  // FIXED: Helper to get transaction receipt and block number
-  // =============================================
   async function getTransactionDetails(txHash) {
     if (!publicClient || !txHash) return { blockNumber: null };
     try {
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return {
-        blockNumber: receipt.blockNumber ? Number(receipt.blockNumber) : null,
-        status: receipt.status
-      };
-    } catch (err) {
-      console.error('Error getting transaction receipt:', err);
-      return { blockNumber: null };
-    }
+      return { blockNumber: receipt.blockNumber ? Number(receipt.blockNumber) : null, status: receipt.status };
+    } catch (err) { console.error('Error getting transaction receipt:', err); return { blockNumber: null }; }
   }
 
   async function doApprove(amountHuman) {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
       setLoading(true);
-      // FIX: writeContract returns hash directly in wagmi v2
-      const txHashResult = await writeContractSafe(ensureClient(), { 
-        address: TOKEN_ADDRESS, 
-        abi: AFROX_PROXY_ABI, 
-        functionName: 'approve', 
-        args: [STAKING_ADDRESS, toRaw(amountHuman)] 
-      });
+      const txHashResult = await writeContractSafe(ensureClient(), { address: TOKEN_ADDRESS, abi: AFROX_PROXY_ABI, functionName: 'approve', args: [STAKING_ADDRESS, toRaw(amountHuman)] });
       setTxHash(txHashResult ?? null);
-      
-      // Wait for confirmation
-      if (txHashResult && publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash: txHashResult });
-      }
-      
+      if (txHashResult && publicClient) { await publicClient.waitForTransactionReceipt({ hash: txHashResult }); }
       await fetchOnChain();
       showAlert('Approve confirmed');
-    } catch (err) {
-      showAlert('Approve failed: ' + (err?.message ?? err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { showAlert('Approve failed: ' + (err?.message ?? err)); } finally { setLoading(false); }
   }
 
-  // =============================================
-  // FIXED: doStake with proper hash and block capture
-  // =============================================
   async function doStake(humanAmount) {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
       if (!humanAmount || Number(humanAmount) <= 0) { showAlert('Enter amount'); return; }
       setLoading(true);
-      
       const amountNum = Number(humanAmount);
       console.log(`🔄 Staking ${amountNum} AfroX...`);
-      
-      // FIX: writeContract returns hash directly, not {hash: ...}
-      const txHashResult = await writeContractSafe(ensureClient(), { 
-        address: STAKING_ADDRESS, 
-        abi: STAKING_ABI, 
-        functionName: 'stake', 
-        args: [toRaw(humanAmount)] 
-      });
-      
+      const txHashResult = await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'stake', args: [toRaw(humanAmount)] });
       console.log(`📝 Transaction hash: ${txHashResult}`);
       setTxHash(txHashResult ?? null);
-      
-      // FIX: Wait for receipt and get block number
       let blockNumber = null;
-      if (txHashResult && publicClient) {
-        const txDetails = await getTransactionDetails(txHashResult);
-        blockNumber = txDetails.blockNumber;
-        console.log(`📦 Block number: ${blockNumber}`);
-      }
-      
-      // =============================================
-      // FIXED: Record staking event with proper data
-      // =============================================
+      if (txHashResult && publicClient) { const txDetails = await getTransactionDetails(txHashResult); blockNumber = txDetails.blockNumber; console.log(`📦 Block number: ${blockNumber}`); }
       if (txHashResult && address) {
         console.log(`💾 Recording stake: ${amountNum} AfroX, TX: ${txHashResult}, Block: ${blockNumber}`);
-        
-        // Record the staking event with all data
         await recordStakingEvent(address, 'stake', amountNum, txHashResult, blockNumber);
-        
-        // Update user's total stake in database
         const newTotal = Number(stakedBalance) + amountNum;
         await updateUserStake(address, newTotal);
-        
-        // Refresh staking history
         const history = await getStakingHistory(address, 20);
         setStakingHistory(history);
-        
         console.log(`✅ Stake recorded to Supabase successfully`);
       }
-      
       showAlert('Stake confirmed');
       setStakeAmount('');
       await fetchOnChain();
-    } catch (err) {
-      console.error('Stake error:', err);
-      showAlert('Stake failed: ' + (err?.message ?? err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error('Stake error:', err); showAlert('Stake failed: ' + (err?.message ?? err)); } finally { setLoading(false); }
   }
 
-  // =============================================
-  // FIXED: doUnstake with proper hash and block capture
-  // =============================================
   async function doUnstake(humanAmount) {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
       if (!humanAmount || Number(humanAmount) <= 0) { showAlert('Enter amount'); return; }
       setLoading(true);
-      
       const amountNum = Number(humanAmount);
       console.log(`🔄 Unstaking ${amountNum} AfroX...`);
-      
-      // FIX: writeContract returns hash directly
-      const txHashResult = await writeContractSafe(ensureClient(), { 
-        address: STAKING_ADDRESS, 
-        abi: STAKING_ABI, 
-        functionName: 'unstake', 
-        args: [toRaw(humanAmount)] 
-      });
-      
+      const txHashResult = await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'unstake', args: [toRaw(humanAmount)] });
       console.log(`📝 Transaction hash: ${txHashResult}`);
       setTxHash(txHashResult ?? null);
-      
-      // FIX: Wait for receipt and get block number
       let blockNumber = null;
-      if (txHashResult && publicClient) {
-        const txDetails = await getTransactionDetails(txHashResult);
-        blockNumber = txDetails.blockNumber;
-        console.log(`📦 Block number: ${blockNumber}`);
-      }
-      
-      // =============================================
-      // FIXED: Record unstaking event with proper data
-      // =============================================
+      if (txHashResult && publicClient) { const txDetails = await getTransactionDetails(txHashResult); blockNumber = txDetails.blockNumber; console.log(`📦 Block number: ${blockNumber}`); }
       if (txHashResult && address) {
         console.log(`💾 Recording unstake: ${amountNum} AfroX, TX: ${txHashResult}, Block: ${blockNumber}`);
-        
         await recordStakingEvent(address, 'unstake', amountNum, txHashResult, blockNumber);
-        
         const newTotal = Math.max(0, Number(stakedBalance) - amountNum);
         await updateUserStake(address, newTotal);
-        
         const history = await getStakingHistory(address, 20);
         setStakingHistory(history);
-        
         console.log(`✅ Unstake recorded to Supabase successfully`);
       }
-      
       showAlert('Unstake confirmed');
       setUnstakeAmount('');
       await fetchOnChain();
-    } catch (err) {
-      console.error('Unstake error:', err);
-      showAlert('Unstake failed: ' + (err?.message ?? err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error('Unstake error:', err); showAlert('Unstake failed: ' + (err?.message ?? err)); } finally { setLoading(false); }
   }
 
-  // =============================================
-  // FIXED: doClaim with proper hash capture
-  // =============================================
   async function doClaim() {
     try {
       if (!isConnected) { showAlert('Connect wallet'); return; }
       setLoading(true);
       const tiny = parseUnits('0.0001', decimals);
-      
       console.log(`🔄 Claiming rewards...`);
-      
-      // FIX: Get hash directly
-      const txHash1 = await writeContractSafe(ensureClient(), { 
-        address: STAKING_ADDRESS, 
-        abi: STAKING_ABI, 
-        functionName: 'unstake', 
-        args: [tiny] 
-      });
-      
-      // Wait for first tx
+      const txHash1 = await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'unstake', args: [tiny] });
       let blockNumber = null;
-      if (txHash1 && publicClient) {
-        const txDetails = await getTransactionDetails(txHash1);
-        blockNumber = txDetails.blockNumber;
-      }
-      
-      await writeContractSafe(ensureClient(), { 
-        address: STAKING_ADDRESS, 
-        abi: STAKING_ABI, 
-        functionName: 'stake', 
-        args: [tiny] 
-      });
-      
-      // =============================================
-      // FIXED: Record claim event with proper data
-      // =============================================
+      if (txHash1 && publicClient) { const txDetails = await getTransactionDetails(txHash1); blockNumber = txDetails.blockNumber; }
+      await writeContractSafe(ensureClient(), { address: STAKING_ADDRESS, abi: STAKING_ABI, functionName: 'stake', args: [tiny] });
       if (txHash1 && address) {
         const rewardsNum = Number(rewardsAccum);
         console.log(`💾 Recording claim: ${rewardsNum} AfroX, TX: ${txHash1}, Block: ${blockNumber}`);
-        
         await recordStakingEvent(address, 'claim', rewardsNum, txHash1, blockNumber);
-        
         const history = await getStakingHistory(address, 20);
         setStakingHistory(history);
-        
         console.log(`✅ Claim recorded to Supabase successfully`);
       }
-      
       showAlert('Claim executed');
       await fetchOnChain();
-    } catch (err) {
-      console.error('Claim error:', err);
-      showAlert('Claim failed: ' + (err?.message ?? err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error('Claim error:', err); showAlert('Claim failed: ' + (err?.message ?? err)); } finally { setLoading(false); }
   }
 
   const cardGlow = { boxShadow: '0 0 18px rgba(255,140,0,0.12)' };
@@ -560,7 +443,6 @@ export default function AfrodexStaking() {
                   <button onClick={doClaim} disabled={loading} className="py-3 rounded-xl bg-orange-500 text-black font-semibold">Claim Rewards</button>
                 </div>
                 {txHash && <div className="mt-2 text-xs text-gray-400">Tx: <span className="text-orange-200 break-all">{txHash}</span></div>}
-                
                 <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg text-xs text-yellow-200">
                   <strong>Note:</strong> Your proxy auto-claims rewards on stake/unstake. To manually trigger claim without separate claim function, stake/unstake a tiny amount (e.g. 0.0001 AfroX).
                 </div>
@@ -580,9 +462,8 @@ export default function AfrodexStaking() {
                   ))}
                 </div>
                 <div className="mt-4 text-xs text-gray-500 text-center">
-                  Base: 0.6%/day {stakedDays >= 30 && '+ 0.06% bonus'} | Days staked: {stakedDays}
+                  Base: 0.06%/day {stakedDays >= 30 && '+ 0.006% bonus'} | Days staked: {stakedDays}
                 </div>
-                
                 <div className="mt-3 p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg text-xs text-blue-200">
                   <strong>Note:</strong> Reward projections are basically estimates all chain conditions being normal, realtime rewards will show on the top dashboard inside Accumulated Rewards and that is what will be distributed to your wallet.
                 </div>
