@@ -256,6 +256,9 @@ export default function AmbassadorDashboard({ stakedBalance, badgeTier, afroxPri
               <li>• L4: <span className="text-orange-400 font-bold">6%</span> of their first 30 days rewards</li>
               <li>• L5: <span className="text-red-400 font-bold">3%</span> of their first 30 days rewards</li>
             </ul>
+            <div className="mt-2 p-2 bg-blue-900/30 rounded text-xs text-blue-200">
+              💡 First 30 days rewards = stake × 0.06%/day × 30 = <span className="font-bold">1.8% of stake</span>
+            </div>
           </div>
           <div>
             <h3 className="font-semibold text-white mb-2">🔒 Eligibility Rules</h3>
