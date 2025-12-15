@@ -11,16 +11,19 @@ export const supabase = supabaseUrl && supabaseAnonKey
 
 // =============================================
 // COMMISSION RATES BY TIER AND LEVEL
+// L1: 15%, L2: 12%, L3: 9%, L4: 6%, L5: 3%
+// Rates are % of referee's first 30 days rewards
+// First 30 days rewards = stake × 0.06% × 30 = stake × 1.8%
 // =============================================
 const COMMISSION_RATES = {
-  'Diamond Custodian': { 1: 0.15, 2: 0.10, 3: 0.07, 4: 0.05, 5: 0.03 },
-  'Platinum Sentinel': { 1: 0.15, 2: 0.10, 3: 0.07, 4: 0.05, 5: 0.03 },
-  'Marshal':           { 1: 0.15, 2: 0.10, 3: 0.07, 4: 0.05, 5: 0.03 },
-  'General':           { 1: 0.15, 2: 0.10, 3: 0.07, 4: 0.05, 5: 0 },
-  'Commander':         { 1: 0.15, 2: 0.10, 3: 0.07, 4: 0, 5: 0 },
-  'Captain':           { 1: 0.15, 2: 0.10, 3: 0, 4: 0, 5: 0 },
-  'Cadet':             { 1: 0.15, 2: 0, 3: 0, 4: 0, 5: 0 },
-  'Starter':           { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+  'Diamond Custodian': { 1: 0.15, 2: 0.12, 3: 0.09, 4: 0.06, 5: 0.03 },
+  'Platinum Sentinel': { 1: 0.15, 2: 0.12, 3: 0.09, 4: 0.06, 5: 0.03 },
+  'Marshal':           { 1: 0.15, 2: 0.12, 3: 0.09, 4: 0.06, 5: 0.03 },
+  'General':           { 1: 0.15, 2: 0.12, 3: 0.09, 4: 0.06, 5: 0 },    // L1-L4 only
+  'Commander':         { 1: 0.15, 2: 0.12, 3: 0.09, 4: 0, 5: 0 },       // L1-L3 only
+  'Captain':           { 1: 0.15, 2: 0.12, 3: 0, 4: 0, 5: 0 },          // L1-L2 only
+  'Cadet':             { 1: 0.15, 2: 0, 3: 0, 4: 0, 5: 0 },             // L1 only
+  'Starter':           { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }                 // No commissions
 };
 
 // Minimum stake required to receive commissions (1B tokens)
@@ -215,21 +218,47 @@ function getBadgeTierFromStake(staked) {
 }
 
 /**
- * Find referrer by code
+ * Find referrer by code (case-insensitive)
  */
 export async function findReferrerByCode(referralCode) {
   if (!supabase || !referralCode) return null;
   
   try {
-    const { data, error } = await supabase
+    // Normalize the referral code to lowercase for comparison
+    const normalizedCode = referralCode.toLowerCase();
+    
+    console.log(`🔍 Looking for referrer with code: ${referralCode} (normalized: ${normalizedCode})`);
+    
+    // First try exact match
+    let { data, error } = await supabase
       .from('users')
       .select('wallet_address, referral_code, badge_tier, total_staked')
-      .eq('referral_code', referralCode)
+      .eq('referral_code', normalizedCode)
       .single();
+    
+    // If not found, try case-insensitive search using ilike
+    if (!data && error?.code === 'PGRST116') {
+      const { data: iLikeData, error: iLikeError } = await supabase
+        .from('users')
+        .select('wallet_address, referral_code, badge_tier, total_staked')
+        .ilike('referral_code', normalizedCode)
+        .single();
+      
+      if (!iLikeError) {
+        data = iLikeData;
+        error = null;
+      }
+    }
     
     if (error && error.code !== 'PGRST116') {
       console.error('Error finding referrer:', error);
       return null;
+    }
+    
+    if (data) {
+      console.log(`✅ Found referrer: ${data.wallet_address.slice(0, 10)}... (code: ${data.referral_code})`);
+    } else {
+      console.log(`❌ No referrer found for code: ${referralCode}`);
     }
     
     return data;
@@ -243,9 +272,14 @@ export async function findReferrerByCode(referralCode) {
  * Register referral by code
  */
 async function registerReferralByCode(referralCode, refereeAddress) {
-  if (!supabase || !referralCode || !refereeAddress) return false;
+  if (!supabase || !referralCode || !refereeAddress) {
+    console.log(`❌ registerReferralByCode: Missing params - code: ${referralCode}, referee: ${refereeAddress}`);
+    return false;
+  }
   
   try {
+    console.log(`📎 Registering referral for ${refereeAddress.slice(0, 10)}... with code: ${referralCode}`);
+    
     const referrer = await findReferrerByCode(referralCode);
     if (!referrer) {
       console.log(`❌ Referral code not found: ${referralCode}`);
@@ -258,7 +292,15 @@ async function registerReferralByCode(referralCode, refereeAddress) {
       return false;
     }
     
-    return await registerReferral(referrer.wallet_address, refereeAddress);
+    console.log(`✅ Found referrer: ${referrer.wallet_address.slice(0, 10)}... - proceeding with registration`);
+    
+    const result = await registerReferral(referrer.wallet_address, refereeAddress);
+    
+    if (result) {
+      console.log(`🎉 Referral successfully registered!`);
+    }
+    
+    return result;
   } catch (error) {
     console.error('Error in registerReferralByCode:', error);
     return false;
@@ -275,21 +317,24 @@ export async function registerReferral(referrerAddress, refereeAddress) {
   const lowerReferee = refereeAddress.toLowerCase();
   
   try {
-    // Check if referral already exists
+    console.log(`📝 Registering referral: ${lowerReferrer.slice(0, 10)}... → ${lowerReferee.slice(0, 10)}...`);
+    
+    // Check if L1 referral already exists
     const { data: existing } = await supabase
       .from('referrals')
       .select('id')
       .eq('referrer_address', lowerReferrer)
       .eq('referee_address', lowerReferee)
+      .eq('level', 1)
       .single();
     
     if (existing) {
-      console.log('📎 Referral already exists');
+      console.log('📎 L1 Referral already exists');
       return true;
     }
     
     // Insert L1 (direct referral)
-    const { error: l1Error } = await supabase
+    const { data: l1Data, error: l1Error } = await supabase
       .from('referrals')
       .insert({
         referrer_address: lowerReferrer,
@@ -297,17 +342,22 @@ export async function registerReferral(referrerAddress, refereeAddress) {
         level: 1,
         is_active: true,
         created_at: new Date().toISOString()
-      });
+      })
+      .select()
+      .single();
     
     if (l1Error) {
-      console.error('Error inserting L1 referral:', l1Error);
+      console.error('❌ Error inserting L1 referral:', l1Error);
       return false;
     }
     
-    console.log(`✅ L1 referral registered: ${lowerReferrer.slice(0, 10)}... → ${lowerReferee.slice(0, 10)}...`);
+    console.log(`✅ L1 referral registered (ID: ${l1Data?.id}): ${lowerReferrer.slice(0, 10)}... → ${lowerReferee.slice(0, 10)}...`);
+    
+    // Track all ambassadors whose stats need updating
+    const ambassadorsToUpdate = [lowerReferrer];
     
     // Build L2-L5 chain by finding referrer's upline
-    const { data: uplineChain } = await supabase
+    const { data: uplineChain, error: uplineError } = await supabase
       .from('referrals')
       .select('referrer_address, level')
       .eq('referee_address', lowerReferrer)
@@ -315,12 +365,32 @@ export async function registerReferral(referrerAddress, refereeAddress) {
       .order('level', { ascending: true })
       .limit(4);
     
+    if (uplineError) {
+      console.log(`ℹ️ No upline found for ${lowerReferrer.slice(0, 10)}...`);
+    }
+    
     if (uplineChain && uplineChain.length > 0) {
+      console.log(`📊 Found ${uplineChain.length} upline referrers`);
+      
       for (const upline of uplineChain) {
         const newLevel = upline.level + 1;
         if (newLevel > 5) break;
         
-        await supabase
+        // Check if this level already exists
+        const { data: existingLevel } = await supabase
+          .from('referrals')
+          .select('id')
+          .eq('referrer_address', upline.referrer_address)
+          .eq('referee_address', lowerReferee)
+          .eq('level', newLevel)
+          .single();
+        
+        if (existingLevel) {
+          console.log(`   ⚠️ L${newLevel} already exists, skipping`);
+          continue;
+        }
+        
+        const { data: levelData, error: levelError } = await supabase
           .from('referrals')
           .insert({
             referrer_address: upline.referrer_address,
@@ -328,18 +398,33 @@ export async function registerReferral(referrerAddress, refereeAddress) {
             level: newLevel,
             is_active: true,
             created_at: new Date().toISOString()
-          });
+          })
+          .select()
+          .single();
         
-        console.log(`✅ L${newLevel} referral registered: ${upline.referrer_address.slice(0, 10)}... → ${lowerReferee.slice(0, 10)}...`);
+        if (levelError) {
+          console.error(`   ❌ Error inserting L${newLevel}:`, levelError);
+          continue;
+        }
+        
+        console.log(`   ✅ L${newLevel} referral registered (ID: ${levelData?.id}): ${upline.referrer_address.slice(0, 10)}... → ${lowerReferee.slice(0, 10)}...`);
+        
+        // Add to list of ambassadors to update
+        if (!ambassadorsToUpdate.includes(upline.referrer_address)) {
+          ambassadorsToUpdate.push(upline.referrer_address);
+        }
       }
     }
     
-    // Update ambassador stats
-    await updateAmbassadorStats(lowerReferrer);
+    // Update ambassador stats for ALL affected ambassadors
+    console.log(`📊 Updating stats for ${ambassadorsToUpdate.length} ambassador(s)`);
+    for (const ambassador of ambassadorsToUpdate) {
+      await updateAmbassadorStats(ambassador);
+    }
     
     return true;
   } catch (error) {
-    console.error('Error in registerReferral:', error);
+    console.error('❌ Error in registerReferral:', error);
     return false;
   }
 }
@@ -404,6 +489,7 @@ export async function recordStakingEvent(walletAddress, eventType, amount, txHas
 
 // =============================================
 // FIXED: Calculate and Record Commissions for L1-L5
+// First 30 days rewards = stake × 0.06% × 30 = stake × 1.8%
 // =============================================
 async function calculateAndRecordCommissions(stakerAddress, stakeAmount, txHash, blockNumber = null) {
   if (!supabase || !stakerAddress || !stakeAmount || !txHash) {
@@ -417,12 +503,18 @@ async function calculateAndRecordCommissions(stakerAddress, stakeAmount, txHash,
   const lowerStaker = stakerAddress.toLowerCase();
   
   try {
-    // Calculate first 30 days rewards: stake × 0.6% daily × 30 days = stake × 18%
-    const firstMonthRewards = stakeAmount * 0.18;
+    // =============================================
+    // FIXED: Correct calculation
+    // Daily rate = 0.06% = 0.0006
+    // First 30 days rewards = stake × 0.0006 × 30 = stake × 0.018 = 1.8%
+    // =============================================
+    const DAILY_RATE = 0.0006; // 0.06% per day
+    const firstMonthRewards = stakeAmount * DAILY_RATE * 30; // = stakeAmount * 0.018
     
     console.log(`📊 Calculating commissions for staker ${lowerStaker.slice(0, 10)}...`);
     console.log(`   Stake amount: ${stakeAmount}`);
-    console.log(`   First 30 days rewards: ${firstMonthRewards}`);
+    console.log(`   Daily rate: ${DAILY_RATE * 100}%`);
+    console.log(`   First 30 days rewards: ${firstMonthRewards} (${(DAILY_RATE * 30 * 100).toFixed(2)}% of stake)`);
     
     // Get referral chain (all ambassadors who referred this staker)
     const { data: referralChain, error: refError } = await supabase
@@ -476,7 +568,7 @@ async function calculateAndRecordCommissions(stakerAddress, stakeAmount, txHash,
         continue;
       }
       
-      // Calculate commission amount
+      // Calculate commission amount = first30DaysRewards × rate
       const commissionAmount = firstMonthRewards * rate;
       
       console.log(`   L${level} Rate: ${rate * 100}%, Commission: ${commissionAmount}`);
