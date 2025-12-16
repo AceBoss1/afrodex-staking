@@ -38,11 +38,11 @@ export default function LPMiningDashboard({ afroxPrice }) {
   const AFROX_TOKEN = process.env.NEXT_PUBLIC_AFRODEX_TOKEN_ADDRESS;
 
   const lockOptions = useMemo(() => [
-    { days: 30, label: '30 Days', instantBonusPct: 5, miningBonusPct: 5, totalApy: 10 },
-    { days: 60, label: '60 Days', instantBonusPct: 5, miningBonusPct: 12, totalApy: 17 },
-    { days: 90, label: '90 Days', instantBonusPct: 5, miningBonusPct: 20, totalApy: 25 },
-    { days: 180, label: '180 Days', instantBonusPct: 5, miningBonusPct: 67, totalApy: 72 },
-    { days: 365, label: '365 Days', instantBonusPct: 5, miningBonusPct: 150, totalApy: 155 }
+    { days: 30, label: '30 Days', instantBonusPct: 5, miningBonusPct: 13, totalApy: 18 },
+    { days: 60, label: '60 Days', instantBonusPct: 5, miningBonusPct: 31, totalApy: 36 },
+    { days: 90, label: '90 Days', instantBonusPct: 5, miningBonusPct: 49, totalApy: 54 },
+    { days: 180, label: '180 Days', instantBonusPct: 5, miningBonusPct: 103, totalApy: 108 },
+    { days: 365, label: '365 Days', instantBonusPct: 5, miningBonusPct: 211, totalApy: 216 }
   ], []);
 
   const loadLPData = useCallback(async () => {
@@ -338,7 +338,7 @@ export default function LPMiningDashboard({ afroxPrice }) {
         <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-300">
           <div><h3 className="font-semibold text-orange-400 mb-2">🔒 Lock Your LP Tokens</h3><p>Deposit Uniswap LP tokens for 30-365 days. Rewards are based on your <strong>AfroX value</strong>!</p></div>
           <div><h3 className="font-semibold text-orange-400 mb-2">🎁 Instant Bonus (5%)</h3><p>Receive <strong>5%</strong> as instant bonus after 7 days. Your referrer also gets <strong>5%</strong>!</p></div>
-          <div><h3 className="font-semibold text-orange-400 mb-2">⛏️ Mining Rewards</h3><p>Earn 5-150% additional mining rewards based on lock duration.</p></div>
+          <div><h3 className="font-semibold text-orange-400 mb-2">⛏️ Mining Rewards</h3><p>Earn 13-211% additional mining rewards based on lock duration.</p></div>
           <div><h3 className="font-semibold text-orange-400 mb-2">⚠️ Early Unlock</h3><p>Need funds early? Unlock with 10-20% penalty on rewards.</p></div>
         </div>
       </motion.div>
