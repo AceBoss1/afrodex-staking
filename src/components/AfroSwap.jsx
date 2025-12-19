@@ -471,6 +471,25 @@ export default function AfroSwap({ afroxPrice, onClose, onNavigateToLPMining }) 
           <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">&times;</button>
         </div>
 
+        {/* GeckoTerminal Price Chart */}
+        <div className="px-4 pt-4">
+          <div style={{ position: 'relative', width: '100%', height: '300px', borderRadius: '12px', overflow: 'hidden' }}>
+            <iframe
+              id="geckoterminal-embed"
+              title="GeckoTerminal Embed"
+              src="https://www.geckoterminal.com/eth/pools/0x08130635368AA28b217a4dfb68E1bF8dC525621C?embed=1&info=0&swaps=0&light_chart=0&chart_type=price&resolution=1d&bg_color=000000"
+              frameBorder="0"
+              allow="clipboard-write"
+              allowFullScreen
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                filter: 'brightness(1) saturate(0.7) sepia(0.7) contrast(1.6) hue-rotate(-7deg)'
+              }}
+            />
+          </div>
+        </div>
+
         {/* LP Mining Prompt after adding liquidity */}
         {showLPMiningPrompt && (
           <div className="mx-4 mt-4 p-4 bg-green-900/30 border border-green-500 rounded-xl">
@@ -479,7 +498,7 @@ export default function AfroSwap({ afroxPrice, onClose, onNavigateToLPMining }) 
               <div className="flex-1">
                 <h3 className="font-semibold text-green-400">Liquidity Added Successfully!</h3>
                 <p className="text-sm text-gray-300 mt-1">
-                  Want to earn extra rewards? Lock your LP tokens in the LP Mining Dashboard to earn up to 155% APY!
+                  Want to earn extra rewards? Lock your LP tokens in the LP Mining Dashboard to earn up to 216% APY!
                 </p>
                 <div className="flex gap-2 mt-3">
                   <button
@@ -504,7 +523,7 @@ export default function AfroSwap({ afroxPrice, onClose, onNavigateToLPMining }) 
         )}
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-800">
+        <div className="flex border-b border-gray-800 mt-4">
           {['swap', 'limit', 'pool'].map((tab) => (
             <button
               key={tab}
